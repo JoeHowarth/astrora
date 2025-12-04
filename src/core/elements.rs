@@ -18,6 +18,9 @@ use crate::core::linalg::{Vector3, Matrix3};
 use pyo3::prelude::*;
 use std::f64::consts::PI;
 
+#[cfg(feature = "serde")]
+use serde::{Serialize, Deserialize};
+
 /// Default tolerance for orbital element singularity checks
 pub const DEFAULT_TOL: f64 = 1e-8;
 
@@ -32,6 +35,7 @@ pub const DEFAULT_TOL: f64 = 1e-8;
 /// - `nu`: True anomaly (ν, radians, 0 ≤ ν < 2π)
 #[pyclass(module = "astrora._core", name = "OrbitalElements")]
 #[derive(Debug, Clone, Copy, PartialEq)]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct OrbitalElements {
     /// Semi-major axis (m)
     #[pyo3(get, set)]

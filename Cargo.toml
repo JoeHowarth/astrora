@@ -24,7 +24,7 @@ numpy = "0.22"
 # Mathematical and scientific computing
 # NOTE: These crates automatically use SIMD (SSE2/AVX/AVX2/NEON) for optimal performance
 ndarray = "0.16"        # N-dimensional arrays (uses matrixmultiply for SIMD matrix ops)
-nalgebra = "0.33"       # Linear algebra (SIMD for vectors/matrices, runtime CPU detection)
+nalgebra = { version = "0.33", features = ["serde-serialize"] }  # Linear algebra with serde support
 num-traits = "0.2"      # Numeric trait abstractions
 
 # Parallelization
