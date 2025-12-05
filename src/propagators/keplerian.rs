@@ -78,14 +78,14 @@ pub fn propagate_keplerian(
     let n = (mu / elements.a.powi(3)).sqrt();
 
     // Step 2: Convert initial true anomaly to mean anomaly
-    let M0 = true_to_mean_anomaly(elements.nu, elements.e)?;
+    let m0 = true_to_mean_anomaly(elements.nu, elements.e)?;
 
     // Step 3: Propagate mean anomaly
     // M = M₀ + n·Δt
-    let M = (M0 + n * dt).rem_euclid(2.0 * PI);
+    let m_anom = (m0 + n * dt).rem_euclid(2.0 * PI);
 
     // Step 4: Convert new mean anomaly to true anomaly
-    let nu_new = mean_to_true_anomaly(M, elements.e, None, None)?;
+    let nu_new = mean_to_true_anomaly(m_anom, elements.e, None, None)?;
 
     // Step 5: Create new orbital elements with updated true anomaly
     // All other elements (a, e, i, Ω, ω) remain constant for Keplerian motion
@@ -202,7 +202,7 @@ fn calculate_delta_nu(
 
     // For now, use simple mean anomaly propagation to get Δν
     // This is equivalent to the full method but more straightforward
-    let delta_M = n * dt;
+    let delta_m = n * dt;
 
     // For small angles, Δν ≈ ΔM for circular orbits
     // For general case, we need to know eccentricity
@@ -232,9 +232,9 @@ fn calculate_delta_nu(
     };
 
     // Convert to mean anomaly, propagate, convert back
-    let M0 = true_to_mean_anomaly(nu0, e)?;
-    let M = M0 + delta_M;
-    let nu = mean_to_true_anomaly(M, e, None, None)?;
+    let m0 = true_to_mean_anomaly(nu0, e)?;
+    let m_anom = m0 + delta_m;
+    let nu = mean_to_true_anomaly(m_anom, e, None, None)?;
 
     Ok(nu - nu0)
 }

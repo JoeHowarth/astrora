@@ -103,7 +103,6 @@ pub const TYPICAL_DRAG_COEFFICIENT: f64 = 2.2;
 ///     B,
 ///     100e3,  // 100 km terminal altitude
 ///     365.25 * 86400.0, // Max 1 year
-///     600.0   // 10-minute time steps
 /// ).unwrap() / 86400.0;
 ///
 /// println!("Estimated lifetime: {:.1} days", lifetime_days);
@@ -113,7 +112,7 @@ pub const TYPICAL_DRAG_COEFFICIENT: f64 = 2.2;
 ///
 /// - Uses exponential atmospheric model (suitable for LEO, not high accuracy)
 /// - Includes J2 perturbation for realistic orbit evolution
-/// - Time step is adaptive: larger steps at higher altitudes
+/// - Time step is fully adaptive: larger steps at higher altitudes
 /// - For very low ballistic coefficients, may take hours to compute
 /// - Does not account for solar activity variations (assumes nominal conditions)
 pub fn estimate_lifetime(
@@ -122,7 +121,6 @@ pub fn estimate_lifetime(
     ballistic_coeff: f64,
     terminal_altitude: f64,
     max_time: f64,
-    initial_time_step: f64,
 ) -> PoliastroResult<f64> {
     // Validate inputs
     if ballistic_coeff <= 0.0 {
@@ -167,12 +165,11 @@ pub fn estimate_lifetime(
     let mut r = *r0;
     let mut v = *v0;
     let mut time = 0.0;
-    let mut dt = initial_time_step;
+    let mut dt;
 
     // Atmospheric parameters
     let rho0 = DEFAULT_RHO0;
     let h_ref = DEFAULT_H0;
-    let H = DEFAULT_SCALE_HEIGHT;
 
     // Adaptive time stepping based on altitude
     // Higher altitudes = slower decay = can use larger time steps
@@ -398,7 +395,6 @@ mod tests {
             B,
             100_000.0,      // 100 km terminal
             10.0 * 86400.0, // Max 10 days
-            10.0,           // 10 second initial step
         ).unwrap();
 
         // Should decay within 10 days
@@ -426,8 +422,8 @@ mod tests {
         let r2 = Vector3::new(R_EARTH + 160_000.0, 0.0, 0.0);
         let v2 = Vector3::new(0.0, (GM_EARTH / r2.norm()).sqrt(), 0.0);
 
-        let lifetime1 = estimate_lifetime(&r1, &v1, B, 100_000.0, 10.0 * 86400.0, 10.0).unwrap();
-        let lifetime2 = estimate_lifetime(&r2, &v2, B, 100_000.0, 20.0 * 86400.0, 10.0).unwrap();
+        let lifetime1 = estimate_lifetime(&r1, &v1, B, 100_000.0, 10.0 * 86400.0).unwrap();
+        let lifetime2 = estimate_lifetime(&r2, &v2, B, 100_000.0, 20.0 * 86400.0).unwrap();
 
         // Higher orbit should last longer
         assert!(lifetime2 > lifetime1);
@@ -443,16 +439,16 @@ mod tests {
         let v0 = Vector3::new(0.0, 7670.0, 0.0);
 
         // Negative ballistic coefficient
-        let result = estimate_lifetime(&r0, &v0, -0.01, 100_000.0, 86400.0, 60.0);
+        let result = estimate_lifetime(&r0, &v0, -0.01, 100_000.0, 86400.0);
         assert!(result.is_err());
 
         // Negative terminal altitude
-        let result = estimate_lifetime(&r0, &v0, 0.01, -100_000.0, 86400.0, 60.0);
+        let result = estimate_lifetime(&r0, &v0, 0.01, -100_000.0, 86400.0);
         assert!(result.is_err());
 
         // Initial altitude below terminal
         let r_low = Vector3::new(R_EARTH + 50_000.0, 0.0, 0.0);
-        let result = estimate_lifetime(&r_low, &v0, 0.01, 100_000.0, 86400.0, 60.0);
+        let result = estimate_lifetime(&r_low, &v0, 0.01, 100_000.0, 86400.0);
         assert!(result.is_err());
     }
 
@@ -461,7 +457,7 @@ mod tests {
         let r0 = Vector3::new(R_EARTH + 400_000.0, 0.0, 0.0);
         let v0 = Vector3::new(0.0, 7670.0, 0.0);
 
-        let result = estimate_lifetime(&r0, &v0, 0.0, 100_000.0, 86400.0, 60.0);
+        let result = estimate_lifetime(&r0, &v0, 0.0, 100_000.0, 86400.0);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("ballistic_coeff"));
     }
@@ -471,7 +467,7 @@ mod tests {
         let r0 = Vector3::new(R_EARTH + 400_000.0, 0.0, 0.0);
         let v0 = Vector3::new(0.0, 7670.0, 0.0);
 
-        let result = estimate_lifetime(&r0, &v0, 0.01, 100_000.0, 0.0, 60.0);
+        let result = estimate_lifetime(&r0, &v0, 0.01, 100_000.0, 0.0);
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("max_time"));
     }
@@ -482,7 +478,7 @@ mod tests {
         let r0 = Vector3::new(R_EARTH + 99_000.0, 0.0, 0.0); // 99 km < 100 km terminal
         let v0 = Vector3::new(0.0, 7670.0, 0.0);
 
-        let result = estimate_lifetime(&r0, &v0, 0.01, 100_000.0, 86400.0, 60.0);
+        let result = estimate_lifetime(&r0, &v0, 0.01, 100_000.0, 86400.0);
         // Should error because altitude is below terminal
         assert!(result.is_err());
     }
@@ -655,7 +651,6 @@ mod tests {
             B,
             100_000.0,  // Terminal at 100 km
             3600.0,     // Max 1 hour
-            1.0,        // 1 second time step
         );
 
         // Should succeed and give short lifetime
@@ -672,7 +667,7 @@ mod tests {
         let v0 = Vector3::new(0.0, 7670.0, 0.0);
 
         // Very small max_time, satellite won't decay
-        let result = estimate_lifetime(&r0, &v0, 0.001, 100_000.0, 1.0, 1.0);
+        let result = estimate_lifetime(&r0, &v0, 0.001, 100_000.0, 1.0);
 
         // Should error due to exceeding max_time
         assert!(result.is_err());
@@ -684,7 +679,7 @@ mod tests {
         let r0 = Vector3::new(R_EARTH + 400_000.0, 0.0, 0.0);
         let v0 = Vector3::new(0.0, 7670.0, 0.0);
 
-        let result = estimate_lifetime(&r0, &v0, 0.01, -1000.0, 86400.0, 600.0);
+        let result = estimate_lifetime(&r0, &v0, 0.01, -1000.0, 86400.0);
 
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("terminal_altitude"));
@@ -697,12 +692,12 @@ mod tests {
         let v0 = Vector3::new(0.0, 7670.0, 0.0);
 
         // Negative ballistic coefficient
-        let result = estimate_lifetime(&r0, &v0, -0.01, 100_000.0, 86400.0, 600.0);
+        let result = estimate_lifetime(&r0, &v0, -0.01, 100_000.0, 86400.0);
         assert!(result.is_err());
 
         // Zero ballistic coefficient (already tested separately)
         // Negative max_time
-        let result = estimate_lifetime(&r0, &v0, 0.01, 100_000.0, -100.0, 600.0);
+        let result = estimate_lifetime(&r0, &v0, 0.01, 100_000.0, -100.0);
         assert!(result.is_err());
     }
 }

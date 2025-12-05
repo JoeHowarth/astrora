@@ -94,26 +94,26 @@ pub fn mean_to_eccentric_anomaly(
     let max_iter = max_iter.unwrap_or(DEFAULT_MAX_ITER);
 
     // Normalize mean anomaly to [0, 2π)
-    let M = mean_anomaly.rem_euclid(2.0 * PI);
+    let m_anom = mean_anomaly.rem_euclid(2.0 * PI);
 
     // Initial guess using smart heuristic
     // For moderate eccentricities, E₀ = M + e·sin(M) is excellent
     // For high eccentricities near π, use M directly
-    let E0 = if eccentricity < 0.8 {
-        M + eccentricity * M.sin()
+    let e0 = if eccentricity < 0.8 {
+        m_anom + eccentricity * m_anom.sin()
     } else {
         // For high eccentricity, start with mean anomaly
-        M
+        m_anom
     };
 
     // Define Kepler's equation and its ratio for Newton-Raphson
     // f(E) = E - e·sin(E) - M
     // f'(E) = 1 - e·cos(E)
     // ratio = f/f' = (E - e·sin(E) - M) / (1 - e·cos(E))
-    let ratio = |E: f64| (E - eccentricity * E.sin() - M) / (1.0 - eccentricity * E.cos());
-    let f = |E: f64| E - eccentricity * E.sin() - M;
+    let ratio = |ecc_anom: f64| (ecc_anom - eccentricity * ecc_anom.sin() - m_anom) / (1.0 - eccentricity * ecc_anom.cos());
+    let f = |ecc_anom: f64| ecc_anom - eccentricity * ecc_anom.sin() - m_anom;
 
-    newton_raphson_ratio(ratio, f, E0, Some(tol), Some(max_iter))
+    newton_raphson_ratio(ratio, f, e0, Some(tol), Some(max_iter))
 }
 
 /// Convert eccentric anomaly to mean anomaly for elliptical orbits
@@ -147,8 +147,8 @@ pub fn eccentric_to_mean_anomaly(
     }
 
     // Direct calculation
-    let M = (eccentric_anomaly - eccentricity * eccentric_anomaly.sin()).rem_euclid(2.0 * PI);
-    Ok(M)
+    let m_anom = (eccentric_anomaly - eccentricity * eccentric_anomaly.sin()).rem_euclid(2.0 * PI);
+    Ok(m_anom)
 }
 
 /// Convert eccentric anomaly to true anomaly for elliptical orbits
@@ -189,12 +189,12 @@ pub fn eccentric_to_true_anomaly(
     // sin(ν) = (√(1-e²)·sin(E)) / (1 - e·cos(E))
     // This gives correct quadrant with atan2
 
-    let cos_E = eccentric_anomaly.cos();
-    let sin_E = eccentric_anomaly.sin();
-    let denom = 1.0 - eccentricity * cos_E;
+    let cos_e = eccentric_anomaly.cos();
+    let sin_e = eccentric_anomaly.sin();
+    let denom = 1.0 - eccentricity * cos_e;
 
-    let cos_nu = (cos_E - eccentricity) / denom;
-    let sin_nu = ((1.0 - eccentricity * eccentricity).sqrt() * sin_E) / denom;
+    let cos_nu = (cos_e - eccentricity) / denom;
+    let sin_nu = ((1.0 - eccentricity * eccentricity).sqrt() * sin_e) / denom;
 
     // atan2 handles quadrants correctly and returns [-π, π]
     let nu = sin_nu.atan2(cos_nu);
@@ -241,11 +241,11 @@ pub fn true_to_eccentric_anomaly(
     let sin_nu = true_anomaly.sin();
     let denom = 1.0 + eccentricity * cos_nu;
 
-    let cos_E = (eccentricity + cos_nu) / denom;
-    let sin_E = ((1.0 - eccentricity * eccentricity).sqrt() * sin_nu) / denom;
+    let cos_e = (eccentricity + cos_nu) / denom;
+    let sin_e = ((1.0 - eccentricity * eccentricity).sqrt() * sin_nu) / denom;
 
-    let E = sin_E.atan2(cos_E);
-    Ok(E.rem_euclid(2.0 * PI))
+    let ecc_anom = sin_e.atan2(cos_e);
+    Ok(ecc_anom.rem_euclid(2.0 * PI))
 }
 
 /// Convert mean anomaly to true anomaly for elliptical orbits
@@ -266,8 +266,8 @@ pub fn mean_to_true_anomaly(
     tol: Option<f64>,
     max_iter: Option<usize>,
 ) -> PoliastroResult<f64> {
-    let E = mean_to_eccentric_anomaly(mean_anomaly, eccentricity, tol, max_iter)?;
-    eccentric_to_true_anomaly(E, eccentricity)
+    let ecc_anom = mean_to_eccentric_anomaly(mean_anomaly, eccentricity, tol, max_iter)?;
+    eccentric_to_true_anomaly(ecc_anom, eccentricity)
 }
 
 /// Convert true anomaly to mean anomaly for elliptical orbits
@@ -281,8 +281,8 @@ pub fn mean_to_true_anomaly(
 /// # Returns
 /// Mean anomaly M (radians)
 pub fn true_to_mean_anomaly(true_anomaly: f64, eccentricity: f64) -> PoliastroResult<f64> {
-    let E = true_to_eccentric_anomaly(true_anomaly, eccentricity)?;
-    eccentric_to_mean_anomaly(E, eccentricity)
+    let ecc_anom = true_to_eccentric_anomaly(true_anomaly, eccentricity)?;
+    eccentric_to_mean_anomaly(ecc_anom, eccentricity)
 }
 
 // ============================================================================
@@ -342,7 +342,7 @@ pub fn mean_to_hyperbolic_anomaly(
 
     // Initial guess: For hyperbolic orbits, H₀ = M is reasonable
     // More sophisticated: H₀ = sign(M) · ln(2·|M|/e + 1.8)
-    let H0 = if mean_anomaly.abs() > 1.0 {
+    let h0 = if mean_anomaly.abs() > 1.0 {
         mean_anomaly.signum() * (2.0 * mean_anomaly.abs() / eccentricity + 1.8).ln()
     } else {
         mean_anomaly
@@ -351,12 +351,12 @@ pub fn mean_to_hyperbolic_anomaly(
     // Hyperbolic Kepler equation: M = e·sinh(H) - H
     // f(H) = e·sinh(H) - H - M
     // f'(H) = e·cosh(H) - 1
-    let ratio = |H: f64| {
-        (eccentricity * H.sinh() - H - mean_anomaly) / (eccentricity * H.cosh() - 1.0)
+    let ratio = |hyp_anom: f64| {
+        (eccentricity * hyp_anom.sinh() - hyp_anom - mean_anomaly) / (eccentricity * hyp_anom.cosh() - 1.0)
     };
-    let f = |H: f64| eccentricity * H.sinh() - H - mean_anomaly;
+    let f = |hyp_anom: f64| eccentricity * hyp_anom.sinh() - hyp_anom - mean_anomaly;
 
-    newton_raphson_ratio(ratio, f, H0, Some(tol), Some(max_iter))
+    newton_raphson_ratio(ratio, f, h0, Some(tol), Some(max_iter))
 }
 
 /// Convert hyperbolic anomaly to mean anomaly for hyperbolic orbits
@@ -380,8 +380,8 @@ pub fn hyperbolic_to_mean_anomaly(
         });
     }
 
-    let M = eccentricity * hyperbolic_anomaly.sinh() - hyperbolic_anomaly;
-    Ok(M)
+    let m_anom = eccentricity * hyperbolic_anomaly.sinh() - hyperbolic_anomaly;
+    Ok(m_anom)
 }
 
 /// Convert hyperbolic anomaly to true anomaly for hyperbolic orbits
@@ -409,12 +409,12 @@ pub fn hyperbolic_to_true_anomaly(
     // cos(ν) = (e - cosh(H)) / (e·cosh(H) - 1)
     // sin(ν) = (√(e²-1)·sinh(H)) / (e·cosh(H) - 1)
 
-    let cosh_H = hyperbolic_anomaly.cosh();
-    let sinh_H = hyperbolic_anomaly.sinh();
-    let denom = eccentricity * cosh_H - 1.0;
+    let cosh_h = hyperbolic_anomaly.cosh();
+    let sinh_h = hyperbolic_anomaly.sinh();
+    let denom = eccentricity * cosh_h - 1.0;
 
-    let cos_nu = (eccentricity - cosh_H) / denom;
-    let sin_nu = ((eccentricity * eccentricity - 1.0).sqrt() * sinh_H) / denom;
+    let cos_nu = (eccentricity - cosh_h) / denom;
+    let sin_nu = ((eccentricity * eccentricity - 1.0).sqrt() * sinh_h) / denom;
 
     let nu = sin_nu.atan2(cos_nu);
     Ok(nu.rem_euclid(2.0 * PI))
@@ -449,12 +449,12 @@ pub fn true_to_hyperbolic_anomaly(
     let sin_nu = true_anomaly.sin();
     let denom = 1.0 + eccentricity * cos_nu;
 
-    let _cosh_H = (eccentricity + cos_nu) / denom;
-    let sinh_H = ((eccentricity * eccentricity - 1.0).sqrt() * sin_nu) / denom;
+    let _cosh_h = (eccentricity + cos_nu) / denom;
+    let sinh_h = ((eccentricity * eccentricity - 1.0).sqrt() * sin_nu) / denom;
 
     // H = asinh(sinh_H) or acosh(cosh_H)
     // Use asinh for better numerical stability
-    Ok(sinh_H.asinh())
+    Ok(sinh_h.asinh())
 }
 
 /// Convert mean anomaly to true anomaly for hyperbolic orbits
@@ -466,8 +466,8 @@ pub fn mean_to_true_anomaly_hyperbolic(
     tol: Option<f64>,
     max_iter: Option<usize>,
 ) -> PoliastroResult<f64> {
-    let H = mean_to_hyperbolic_anomaly(mean_anomaly, eccentricity, tol, max_iter)?;
-    hyperbolic_to_true_anomaly(H, eccentricity)
+    let hyp_anom = mean_to_hyperbolic_anomaly(mean_anomaly, eccentricity, tol, max_iter)?;
+    hyperbolic_to_true_anomaly(hyp_anom, eccentricity)
 }
 
 /// Convert true anomaly to mean anomaly for hyperbolic orbits
@@ -477,8 +477,8 @@ pub fn true_to_mean_anomaly_hyperbolic(
     true_anomaly: f64,
     eccentricity: f64,
 ) -> PoliastroResult<f64> {
-    let H = true_to_hyperbolic_anomaly(true_anomaly, eccentricity)?;
-    hyperbolic_to_mean_anomaly(H, eccentricity)
+    let hyp_anom = true_to_hyperbolic_anomaly(true_anomaly, eccentricity)?;
+    hyperbolic_to_mean_anomaly(hyp_anom, eccentricity)
 }
 
 // ============================================================================
@@ -524,14 +524,14 @@ pub fn mean_to_true_anomaly_parabolic(mean_anomaly: f64) -> PoliastroResult<f64>
     let term = (q / 2.0).abs();
     let sqrt_term = (term.powi(2) + (p / 3.0).powi(3)).sqrt();
 
-    let D = if mean_anomaly >= 0.0 {
+    let d = if mean_anomaly >= 0.0 {
         (term + sqrt_term).cbrt() - (sqrt_term - term).cbrt()
     } else {
         -((term + sqrt_term).cbrt() - (sqrt_term - term).cbrt())
     };
 
     // Convert D to true anomaly: tan(ν/2) = D
-    let nu = 2.0 * D.atan();
+    let nu = 2.0 * d.atan();
 
     Ok(nu.rem_euclid(2.0 * PI))
 }
@@ -548,12 +548,12 @@ pub fn mean_to_true_anomaly_parabolic(mean_anomaly: f64) -> PoliastroResult<f64>
 /// Mean anomaly M (radians)
 pub fn true_to_mean_anomaly_parabolic(true_anomaly: f64) -> PoliastroResult<f64> {
     // D = tan(ν/2)
-    let D = (true_anomaly / 2.0).tan();
+    let d = (true_anomaly / 2.0).tan();
 
     // Barker's equation: M = D + D³/3
-    let M = D + D.powi(3) / 3.0;
+    let m_anom = d + d.powi(3) / 3.0;
 
-    Ok(M)
+    Ok(m_anom)
 }
 
 // ============================================================================
@@ -616,9 +616,9 @@ pub fn batch_mean_to_eccentric_anomaly(
     let results: Vec<f64> = mean_anomalies
         .par_iter()
         .enumerate()
-        .map(|(i, &M)| {
+        .map(|(i, &m_anom)| {
             let e = if single_ecc { ecc_value } else { eccentricities[i] };
-            mean_to_eccentric_anomaly(M, e, tol, max_iter)
+            mean_to_eccentric_anomaly(m_anom, e, tol, max_iter)
         })
         .collect::<PoliastroResult<Vec<f64>>>()?;
 
@@ -653,9 +653,9 @@ pub fn batch_mean_to_true_anomaly(
     let results: Vec<f64> = eccentric_anomalies
         .par_iter()
         .enumerate()
-        .map(|(i, &E)| {
+        .map(|(i, &ecc_anom)| {
             let e = if single_ecc { ecc_value } else { eccentricities[i] };
-            eccentric_to_true_anomaly(E, e)
+            eccentric_to_true_anomaly(ecc_anom, e)
         })
         .collect::<PoliastroResult<Vec<f64>>>()?;
 
@@ -735,9 +735,9 @@ pub fn batch_mean_to_hyperbolic_anomaly(
     let results: Vec<f64> = mean_anomalies
         .par_iter()
         .enumerate()
-        .map(|(i, &M)| {
+        .map(|(i, &m_anom)| {
             let e = if single_ecc { ecc_value } else { eccentricities[i] };
-            mean_to_hyperbolic_anomaly(M, e, tol, max_iter)
+            mean_to_hyperbolic_anomaly(m_anom, e, tol, max_iter)
         })
         .collect::<PoliastroResult<Vec<f64>>>()?;
 
@@ -769,9 +769,9 @@ pub fn batch_mean_to_true_anomaly_hyperbolic(
     let results: Vec<f64> = hyperbolic_anomalies
         .par_iter()
         .enumerate()
-        .map(|(i, &H)| {
+        .map(|(i, &hyp_anom)| {
             let e = if single_ecc { ecc_value } else { eccentricities[i] };
-            hyperbolic_to_true_anomaly(H, e)
+            hyperbolic_to_true_anomaly(hyp_anom, e)
         })
         .collect::<PoliastroResult<Vec<f64>>>()?;
 
@@ -793,7 +793,7 @@ pub fn batch_mean_to_true_anomaly_parabolic(
     // Parallel processing using rayon
     let results: Vec<f64> = mean_anomalies
         .par_iter()
-        .map(|&M| mean_to_true_anomaly_parabolic(M))
+        .map(|&m_anom| mean_to_true_anomaly_parabolic(m_anom))
         .collect::<PoliastroResult<Vec<f64>>>()?;
 
     Ok(results)

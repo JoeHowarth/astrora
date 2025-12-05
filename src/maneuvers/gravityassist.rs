@@ -334,8 +334,6 @@ impl GravityAssist {
             ));
         }
 
-        let v_infinity = v_infinity_sq.sqrt();
-
         // Calculate semi-major axis: a = -μ / v∞²
         let a = -mu / v_infinity_sq;
 
@@ -476,14 +474,6 @@ impl GravityAssist {
         [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
     }
 
-    fn normalize_vector(v: [f64; 3]) -> [f64; 3] {
-        let mag = Self::vector_magnitude(v);
-        if mag < 1e-10 {
-            [0.0, 0.0, 0.0]
-        } else {
-            [v[0] / mag, v[1] / mag, v[2] / mag]
-        }
-    }
 }
 
 #[cfg(test)]
@@ -745,31 +735,6 @@ mod tests {
         assert_relative_eq!(result[0], 1.0, epsilon = EPSILON);
         assert_relative_eq!(result[1], 2.0, epsilon = EPSILON);
         assert_relative_eq!(result[2], 3.0, epsilon = EPSILON);
-    }
-
-    #[test]
-    fn test_normalize_vector() {
-        let v = [3.0, 4.0, 0.0]; // magnitude = 5
-        let normalized = GravityAssist::normalize_vector(v);
-
-        assert_relative_eq!(normalized[0], 0.6, epsilon = EPSILON);
-        assert_relative_eq!(normalized[1], 0.8, epsilon = EPSILON);
-        assert_relative_eq!(normalized[2], 0.0, epsilon = EPSILON);
-
-        // Check that result has unit magnitude
-        let mag = GravityAssist::vector_magnitude(normalized);
-        assert_relative_eq!(mag, 1.0, epsilon = EPSILON);
-    }
-
-    #[test]
-    fn test_normalize_unit_vector() {
-        // Normalizing an already normalized vector should give same vector
-        let v = [1.0, 0.0, 0.0];
-        let normalized = GravityAssist::normalize_vector(v);
-
-        assert_relative_eq!(normalized[0], 1.0, epsilon = EPSILON);
-        assert_relative_eq!(normalized[1], 0.0, epsilon = EPSILON);
-        assert_relative_eq!(normalized[2], 0.0, epsilon = EPSILON);
     }
 
     #[test]

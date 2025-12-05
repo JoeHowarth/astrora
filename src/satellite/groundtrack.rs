@@ -97,7 +97,6 @@ const WGS84_A: f64 = 6378.137;           // Semi-major axis (km)
 const WGS84_B: f64 = 6356.752314245;     // Semi-minor axis (km)
 const WGS84_F: f64 = 1.0 / 298.257223563; // Flattening
 const WGS84_E2: f64 = WGS84_F * (2.0 - WGS84_F); // First eccentricity squared
-const WGS84_EP2: f64 = (WGS84_A * WGS84_A - WGS84_B * WGS84_B) / (WGS84_B * WGS84_B); // Second eccentricity squared
 
 /// Convergence tolerance for iterative geodetic conversion (radians)
 /// This corresponds to approximately 1 mm on Earth's surface

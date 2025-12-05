@@ -135,7 +135,7 @@ pub fn jacobian_two_body(r: &Vector3, mu: f64) -> na::Matrix6<f64> {
 /// let r = Vector3::new(7000e3, 0.0, 0.0);
 /// let A = jacobian_j2(&r, GM_EARTH, J2_EARTH, R_EARTH);
 /// ```
-pub fn jacobian_j2(r: &Vector3, mu: f64, j2: f64, R: f64) -> na::Matrix6<f64> {
+pub fn jacobian_j2(r: &Vector3, mu: f64, j2: f64, body_radius: f64) -> na::Matrix6<f64> {
     // Start with two-body Jacobian
     let mut jacobian = jacobian_two_body(r, mu);
 
@@ -147,13 +147,11 @@ pub fn jacobian_j2(r: &Vector3, mu: f64, j2: f64, R: f64) -> na::Matrix6<f64> {
     let r_mag = r.norm();
     let r2 = r_mag * r_mag;
     let r4 = r2 * r2;
-    let r6 = r4 * r2;
-    let r8 = r6 * r2;
 
     let z2 = z * z;
 
     // Common coefficient k = (3/2) * J2 * μ * R²
-    let k = 1.5 * j2 * mu * R * R;
+    let k = 1.5 * j2 * mu * body_radius * body_radius;
 
     // The J2 acceleration components are:
     // ax = k/r⁴ · (x/r) · (5z²/r² - 1)
@@ -304,10 +302,10 @@ pub fn propagate_stm_rk4(
         let a = -mu / (r_mag * r_mag * r_mag) * r;
 
         // Compute Jacobian
-        let A = jacobian_two_body(&r, mu);
+        let jacobian = jacobian_two_body(&r, mu);
 
         // STM dynamics: dΦ/dt = A·Φ
-        let dstm_dt = A * stm;
+        let dstm_dt = jacobian * stm;
 
         // Build result vector: [v, a, dΦ/dt flattened]
         let mut result = na::DVector::zeros(42);
@@ -415,8 +413,8 @@ pub fn propagate_stm_dopri5(
 
         let r_mag = r.norm();
         let a = -mu / (r_mag * r_mag * r_mag) * r;
-        let A = jacobian_two_body(&r, mu);
-        let dstm_dt = A * stm;
+        let jacobian = jacobian_two_body(&r, mu);
+        let dstm_dt = jacobian * stm;
 
         let mut result = na::DVector::zeros(42);
         result[0] = v.x;
@@ -495,7 +493,7 @@ pub fn propagate_stm_j2_rk4(
     dt: f64,
     mu: f64,
     j2: f64,
-    R: f64,
+    body_radius: f64,
     n_steps: usize,
 ) -> PoliastroResult<(Vector3, Vector3, na::Matrix6<f64>)> {
     use crate::core::numerical::rk4_step;
@@ -517,12 +515,12 @@ pub fn propagate_stm_j2_rk4(
         // Total acceleration (two-body + J2)
         let r_mag = r.norm();
         let a_twobody = -mu / (r_mag * r_mag * r_mag) * r;
-        let a_j2 = j2_perturbation(&r, mu, j2, R);
+        let a_j2 = j2_perturbation(&r, mu, j2, body_radius);
         let a_total = a_twobody + a_j2;
 
         // Jacobian including J2
-        let A = jacobian_j2(&r, mu, j2, R);
-        let dstm_dt = A * stm;
+        let jacobian = jacobian_j2(&r, mu, j2, body_radius);
+        let dstm_dt = jacobian * stm;
 
         let mut result = na::DVector::zeros(42);
         result[0] = v.x;

@@ -64,7 +64,7 @@ use std::f64::consts::PI;
 /// - For Earth, typical magnitude is ~1e-5 m/s² at LEO altitudes
 /// - J2 causes secular changes in RAAN and argument of perigee
 /// - Effect decreases as ~1/r⁴ with increasing altitude
-pub fn j2_perturbation(r: &Vector3, mu: f64, j2: f64, R: f64) -> Vector3 {
+pub fn j2_perturbation(r: &Vector3, mu: f64, j2: f64, body_radius: f64) -> Vector3 {
     // Position components
     let x = r.x;
     let y = r.y;
@@ -79,7 +79,7 @@ pub fn j2_perturbation(r: &Vector3, mu: f64, j2: f64, R: f64) -> Vector3 {
     let z2 = z * z;
 
     // Common coefficient: (3/2) * J2 * μ * R² / r⁴
-    let k = 1.5 * j2 * mu * R * R / r4;
+    let k = 1.5 * j2 * mu * body_radius * body_radius / r4;
 
     // z²/r² term (appears multiple times)
     let z2_r2 = z2 / r2;
@@ -134,8 +134,8 @@ pub fn j2_perturbation(r: &Vector3, mu: f64, j2: f64, R: f64) -> Vector3 {
 /// - For high-fidelity work, consider Harris-Priester or NRLMSISE-00
 /// - Valid primarily for altitudes 100-1000 km
 /// - Does not account for solar activity, geomagnetic effects, or diurnal variations
-pub fn exponential_density(altitude: f64, rho0: f64, H0: f64) -> f64 {
-    rho0 * (-altitude / H0).exp()
+pub fn exponential_density(altitude: f64, rho0: f64, scale_height: f64) -> f64 {
+    rho0 * (-altitude / scale_height).exp()
 }
 
 /// Atmospheric drag acceleration (exponential atmosphere model)
@@ -189,13 +189,13 @@ pub fn exponential_density(altitude: f64, rho0: f64, H0: f64) -> f64 {
 ///   - ISS: 50-100 kg/m²
 ///   - Large satellites: 100-500 kg/m²
 /// - Higher B = less drag effect (more massive or smaller cross-section)
-pub fn drag_acceleration(r: &Vector3, v: &Vector3, R: f64, rho0: f64, H0: f64, B: f64) -> Vector3 {
+pub fn drag_acceleration(r: &Vector3, v: &Vector3, body_radius: f64, rho0: f64, scale_height: f64, ballistic_coeff: f64) -> Vector3 {
     // Calculate altitude above reference surface
     let r_mag = r.norm();
-    let altitude = r_mag - R;
+    let altitude = r_mag - body_radius;
 
     // Atmospheric density at current altitude
-    let rho = exponential_density(altitude, rho0, H0);
+    let rho = exponential_density(altitude, rho0, scale_height);
 
     // Velocity magnitude and unit vector
     let v_mag = v.norm();
@@ -209,7 +209,7 @@ pub fn drag_acceleration(r: &Vector3, v: &Vector3, R: f64, rho0: f64, H0: f64, B
 
     // Drag acceleration: a = -(1/2) × ρ × v² × (1/B) × v̂
     // Negative sign because drag opposes motion
-    let drag_mag = -0.5 * rho * v_mag * v_mag / B;
+    let drag_mag = -0.5 * rho * v_mag * v_mag / ballistic_coeff;
 
     drag_mag * v_unit
 }
@@ -252,7 +252,7 @@ pub type PerturbationFn = fn(f64, &Vector3, &Vector3) -> Vector3;
 pub fn j2_acceleration_func(
     mu: f64,
     j2: f64,
-    R: f64,
+    body_radius: f64,
 ) -> impl Fn(f64, &nalgebra::DVector<f64>) -> nalgebra::DVector<f64> {
     move |_t: f64, state: &nalgebra::DVector<f64>| -> nalgebra::DVector<f64> {
         // State vector: [x, y, z, vx, vy, vz]
@@ -265,7 +265,7 @@ pub fn j2_acceleration_func(
         let a_twobody = -mu / (r_mag * r_mag * r_mag) * r;
 
         // J2 perturbation acceleration
-        let a_j2 = j2_perturbation(&r, mu, j2, R);
+        let a_j2 = j2_perturbation(&r, mu, j2, body_radius);
 
         // Total acceleration
         let a_total = a_twobody + a_j2;
@@ -308,7 +308,7 @@ pub fn propagate_j2_rk4(
     dt: f64,
     mu: f64,
     j2: f64,
-    R: f64,
+    body_radius: f64,
     n_steps: Option<usize>,
 ) -> PoliastroResult<(Vector3, Vector3)> {
     use crate::core::numerical::rk4_step;
@@ -317,7 +317,7 @@ pub fn propagate_j2_rk4(
     let h = dt / n_steps as f64;
 
     // Create acceleration function
-    let f = j2_acceleration_func(mu, j2, R);
+    let f = j2_acceleration_func(mu, j2, body_radius);
 
     // Initial state vector: [x, y, z, vx, vy, vz]
     let mut state = nalgebra::DVector::from_vec(vec![r0.x, r0.y, r0.z, v0.x, v0.y, v0.z]);
@@ -369,7 +369,7 @@ pub fn propagate_j2_dopri5(
     dt: f64,
     mu: f64,
     j2: f64,
-    R: f64,
+    body_radius: f64,
     tol: Option<f64>,
 ) -> PoliastroResult<(Vector3, Vector3)> {
     use crate::core::numerical::dopri5_integrate;
@@ -377,7 +377,7 @@ pub fn propagate_j2_dopri5(
     let tol = tol.unwrap_or(1e-8);
 
     // Create acceleration function
-    let f = j2_acceleration_func(mu, j2, R);
+    let f = j2_acceleration_func(mu, j2, body_radius);
 
     // Initial state vector
     let state0 = nalgebra::DVector::from_vec(vec![r0.x, r0.y, r0.z, v0.x, v0.y, v0.z]);
@@ -426,7 +426,7 @@ pub fn propagate_j2_dop853(
     dt: f64,
     mu: f64,
     j2: f64,
-    R: f64,
+    body_radius: f64,
     tol: Option<f64>,
 ) -> PoliastroResult<(Vector3, Vector3)> {
     use crate::core::numerical::dop853_integrate;
@@ -434,7 +434,7 @@ pub fn propagate_j2_dop853(
     let tol = tol.unwrap_or(1e-10);
 
     // Create acceleration function
-    let f = j2_acceleration_func(mu, j2, R);
+    let f = j2_acceleration_func(mu, j2, body_radius);
 
     // Initial state vector
     let state0 = nalgebra::DVector::from_vec(vec![r0.x, r0.y, r0.z, v0.x, v0.y, v0.z]);
@@ -465,10 +465,10 @@ pub fn propagate_j2_dop853(
 /// Function that computes [vx, vy, vz, ax, ay, az] given state vector
 pub fn drag_acceleration_func(
     mu: f64,
-    R: f64,
+    body_radius: f64,
     rho0: f64,
-    H0: f64,
-    B: f64,
+    scale_height: f64,
+    ballistic_coeff: f64,
 ) -> impl Fn(f64, &nalgebra::DVector<f64>) -> nalgebra::DVector<f64> {
     move |_t: f64, state: &nalgebra::DVector<f64>| -> nalgebra::DVector<f64> {
         // State vector: [x, y, z, vx, vy, vz]
@@ -481,7 +481,7 @@ pub fn drag_acceleration_func(
         let a_twobody = -mu / (r_mag * r_mag * r_mag) * r;
 
         // Drag acceleration
-        let a_drag = drag_acceleration(&r, &v, R, rho0, H0, B);
+        let a_drag = drag_acceleration(&r, &v, body_radius, rho0, scale_height, ballistic_coeff);
 
         // Total acceleration
         let a_total = a_twobody + a_drag;
@@ -526,10 +526,10 @@ pub fn propagate_drag_rk4(
     v0: &Vector3,
     dt: f64,
     mu: f64,
-    R: f64,
+    body_radius: f64,
     rho0: f64,
-    H0: f64,
-    B: f64,
+    scale_height: f64,
+    ballistic_coeff: f64,
     n_steps: Option<usize>,
 ) -> PoliastroResult<(Vector3, Vector3)> {
     use crate::core::numerical::rk4_step;
@@ -538,7 +538,7 @@ pub fn propagate_drag_rk4(
     let h = dt / n_steps as f64;
 
     // Create acceleration function
-    let f = drag_acceleration_func(mu, R, rho0, H0, B);
+    let f = drag_acceleration_func(mu, body_radius, rho0, scale_height, ballistic_coeff);
 
     // Initial state vector: [x, y, z, vx, vy, vz]
     let mut state = nalgebra::DVector::from_vec(vec![r0.x, r0.y, r0.z, v0.x, v0.y, v0.z]);
@@ -580,10 +580,10 @@ pub fn propagate_drag_dopri5(
     v0: &Vector3,
     dt: f64,
     mu: f64,
-    R: f64,
+    body_radius: f64,
     rho0: f64,
-    H0: f64,
-    B: f64,
+    scale_height: f64,
+    ballistic_coeff: f64,
     tol: Option<f64>,
 ) -> PoliastroResult<(Vector3, Vector3)> {
     use crate::core::numerical::dopri5_integrate;
@@ -591,7 +591,7 @@ pub fn propagate_drag_dopri5(
     let tol = tol.unwrap_or(1e-8);
 
     // Create acceleration function
-    let f = drag_acceleration_func(mu, R, rho0, H0, B);
+    let f = drag_acceleration_func(mu, body_radius, rho0, scale_height, ballistic_coeff);
 
     // Initial state vector
     let state0 = nalgebra::DVector::from_vec(vec![r0.x, r0.y, r0.z, v0.x, v0.y, v0.z]);
@@ -621,10 +621,10 @@ pub fn propagate_drag_dopri5(
 pub fn j2_drag_acceleration_func(
     mu: f64,
     j2: f64,
-    R: f64,
+    body_radius: f64,
     rho0: f64,
-    H0: f64,
-    B: f64,
+    scale_height: f64,
+    ballistic_coeff: f64,
 ) -> impl Fn(f64, &nalgebra::DVector<f64>) -> nalgebra::DVector<f64> {
     move |_t: f64, state: &nalgebra::DVector<f64>| -> nalgebra::DVector<f64> {
         let r = Vector3::new(state[0], state[1], state[2]);
@@ -636,10 +636,10 @@ pub fn j2_drag_acceleration_func(
         let a_twobody = -mu / (r_mag * r_mag * r_mag) * r;
 
         // J2 perturbation
-        let a_j2 = j2_perturbation(&r, mu, j2, R);
+        let a_j2 = j2_perturbation(&r, mu, j2, body_radius);
 
         // Drag perturbation
-        let a_drag = drag_acceleration(&r, &v, R, rho0, H0, B);
+        let a_drag = drag_acceleration(&r, &v, body_radius, rho0, scale_height, ballistic_coeff);
 
         // Total acceleration
         let a_total = a_twobody + a_j2 + a_drag;
@@ -669,10 +669,10 @@ pub fn propagate_j2_drag_rk4(
     dt: f64,
     mu: f64,
     j2: f64,
-    R: f64,
+    body_radius: f64,
     rho0: f64,
-    H0: f64,
-    B: f64,
+    scale_height: f64,
+    ballistic_coeff: f64,
     n_steps: Option<usize>,
 ) -> PoliastroResult<(Vector3, Vector3)> {
     use crate::core::numerical::rk4_step;
@@ -680,7 +680,7 @@ pub fn propagate_j2_drag_rk4(
     let n_steps = n_steps.unwrap_or(10);
     let h = dt / n_steps as f64;
 
-    let f = j2_drag_acceleration_func(mu, j2, R, rho0, H0, B);
+    let f = j2_drag_acceleration_func(mu, j2, body_radius, rho0, scale_height, ballistic_coeff);
 
     let mut state = nalgebra::DVector::from_vec(vec![r0.x, r0.y, r0.z, v0.x, v0.y, v0.z]);
 
@@ -705,17 +705,17 @@ pub fn propagate_j2_drag_dopri5(
     dt: f64,
     mu: f64,
     j2: f64,
-    R: f64,
+    body_radius: f64,
     rho0: f64,
-    H0: f64,
-    B: f64,
+    scale_height: f64,
+    ballistic_coeff: f64,
     tol: Option<f64>,
 ) -> PoliastroResult<(Vector3, Vector3)> {
     use crate::core::numerical::dopri5_integrate;
 
     let tol = tol.unwrap_or(1e-8);
 
-    let f = j2_drag_acceleration_func(mu, j2, R, rho0, H0, B);
+    let f = j2_drag_acceleration_func(mu, j2, body_radius, rho0, scale_height, ballistic_coeff);
 
     let state0 = nalgebra::DVector::from_vec(vec![r0.x, r0.y, r0.z, v0.x, v0.y, v0.z]);
 
@@ -1232,7 +1232,7 @@ pub fn propagate_thirdbody_dopri5(
 /// # References
 /// - Montenbruck & Gill, "Satellite Orbits", Section 3.4
 /// - Vallado, "Fundamentals of Astrodynamics", Section 8.7.2
-pub fn shadow_function(r_sat: &Vector3, r_sun: &Vector3, R_earth: f64) -> f64 {
+pub fn shadow_function(r_sat: &Vector3, r_sun: &Vector3, r_earth: f64) -> f64 {
     use crate::core::constants::R_SUN;
 
     // Vectors from Earth to satellite and Sun
@@ -1253,7 +1253,7 @@ pub fn shadow_function(r_sat: &Vector3, r_sun: &Vector3, R_earth: f64) -> f64 {
 
     // Apparent angular radii as seen from satellite
     // θ = arcsin(R / r) ≈ R/r for small angles
-    let theta_earth = (R_earth / r_sat_mag).asin();
+    let theta_earth = (r_earth / r_sat_mag).asin();
     let theta_sun = (R_SUN / (r_sun_mag - r_sat_mag).abs()).asin();
 
     // Angle between Sun and Earth as seen from spacecraft
@@ -1356,13 +1356,13 @@ pub fn srp_acceleration(
     r_sat: &Vector3,
     r_sun: &Vector3,
     area_mass_ratio: f64,
-    C_r: f64,
-    R_earth: f64,
+    reflectivity: f64,
+    r_earth: f64,
 ) -> Vector3 {
     use crate::core::constants::{AU, SOLAR_RADIATION_PRESSURE};
 
     // Shadow factor (0 = umbra, 1 = full sun)
-    let k = shadow_function(r_sat, r_sun, R_earth);
+    let k = shadow_function(r_sat, r_sun, r_earth);
 
     // If in full shadow, no SRP
     if k < 1e-10 {
@@ -1386,7 +1386,7 @@ pub fn srp_acceleration(
 
     // SRP acceleration magnitude
     // a = k · C_r · (A/m) · P_sun · (AU/r)²
-    let a_mag = k * C_r * area_mass_ratio * SOLAR_RADIATION_PRESSURE * distance_factor;
+    let a_mag = k * reflectivity * area_mass_ratio * SOLAR_RADIATION_PRESSURE * distance_factor;
 
     // Acceleration vector points away from Sun
     a_mag * u_sun
@@ -1409,8 +1409,8 @@ pub fn srp_acceleration(
 pub fn srp_acceleration_func(
     mu: f64,
     area_mass_ratio: f64,
-    C_r: f64,
-    R_earth: f64,
+    reflectivity: f64,
+    r_earth: f64,
     t0: f64,
 ) -> impl Fn(f64, &nalgebra::DVector<f64>) -> nalgebra::DVector<f64> {
     move |t: f64, state: &nalgebra::DVector<f64>| -> nalgebra::DVector<f64> {
@@ -1427,7 +1427,7 @@ pub fn srp_acceleration_func(
         let r_sun = sun_position_simple(t0 + t);
 
         // SRP acceleration
-        let a_srp = srp_acceleration(&r, &r_sun, area_mass_ratio, C_r, R_earth);
+        let a_srp = srp_acceleration(&r, &r_sun, area_mass_ratio, reflectivity, r_earth);
 
         // Total acceleration
         let a_total = a_twobody + a_srp;
@@ -1479,8 +1479,8 @@ pub fn propagate_srp_rk4(
     dt: f64,
     mu: f64,
     area_mass_ratio: f64,
-    C_r: f64,
-    R_earth: f64,
+    reflectivity: f64,
+    r_earth: f64,
     t0: f64,
     n_steps: Option<usize>,
 ) -> PoliastroResult<(Vector3, Vector3)> {
@@ -1490,7 +1490,7 @@ pub fn propagate_srp_rk4(
     let h = dt / (n_steps as f64);
 
     // Create acceleration function
-    let f = srp_acceleration_func(mu, area_mass_ratio, C_r, R_earth, t0);
+    let f = srp_acceleration_func(mu, area_mass_ratio, reflectivity, r_earth, t0);
 
     // Initial state vector
     let mut state = nalgebra::DVector::from_vec(vec![r0.x, r0.y, r0.z, v0.x, v0.y, v0.z]);
@@ -1532,8 +1532,8 @@ pub fn propagate_srp_dopri5(
     dt: f64,
     mu: f64,
     area_mass_ratio: f64,
-    C_r: f64,
-    R_earth: f64,
+    reflectivity: f64,
+    r_earth: f64,
     t0: f64,
     tol: Option<f64>,
 ) -> PoliastroResult<(Vector3, Vector3)> {
@@ -1542,7 +1542,7 @@ pub fn propagate_srp_dopri5(
     let tol = tol.unwrap_or(1e-8);
 
     // Create acceleration function
-    let f = srp_acceleration_func(mu, area_mass_ratio, C_r, R_earth, t0);
+    let f = srp_acceleration_func(mu, area_mass_ratio, reflectivity, r_earth, t0);
 
     // Initial state vector
     let state0 = nalgebra::DVector::from_vec(vec![r0.x, r0.y, r0.z, v0.x, v0.y, v0.z]);

@@ -48,7 +48,6 @@
 use nalgebra::{Vector3, Matrix3};
 use crate::core::PoliastroResult;
 use crate::core::time::Epoch;
-use hifitime::TimeScale;
 use crate::coordinates::rotations::{rotation_x, rotation_z};
 use std::f64::consts::PI;
 use rayon::prelude::*;
@@ -1243,6 +1242,7 @@ pub fn batch_itrs_to_teme(
 mod tests {
     use super::*;
     use approx::assert_relative_eq;
+    use hifitime::TimeScale;
 
     #[test]
     fn test_icrs_creation() {

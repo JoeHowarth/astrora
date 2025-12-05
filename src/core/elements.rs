@@ -139,7 +139,7 @@ impl OrbitalElements {
 /// - `g`: Eccentricity y-component: e·sin(ω + Ω)
 /// - `h`: Inclination x-component: tan(i/2)·cos(Ω)
 /// - `k`: Inclination y-component: tan(i/2)·sin(Ω)
-/// - `L`: True longitude: Ω + ω + ν (radians)
+/// - `l`: True longitude: Ω + ω + ν (radians)
 ///
 /// # Singularities
 /// - Standard formulation: Singularity at i = π (retrograde equatorial orbits)
@@ -161,7 +161,7 @@ pub struct EquinoctialElements {
     /// Inclination y-component (dimensionless)
     pub k: f64,
     /// True longitude (radians)
-    pub L: f64,
+    pub l: f64,
 }
 
 impl EquinoctialElements {
@@ -173,9 +173,9 @@ impl EquinoctialElements {
     /// * `g` - Eccentricity y-component
     /// * `h` - Inclination x-component
     /// * `k` - Inclination y-component
-    /// * `L` - True longitude (radians)
-    pub fn new(p: f64, f: f64, g: f64, h: f64, k: f64, L: f64) -> Self {
-        Self { p, f, g, h, k, L }
+    /// * `l` - True longitude (radians)
+    pub fn new(p: f64, f: f64, g: f64, h: f64, k: f64, l: f64) -> Self {
+        Self { p, f, g, h, k, l }
     }
 
     /// Calculate eccentricity from equinoctial elements
@@ -495,7 +495,7 @@ pub fn coe_to_rv(elements: &OrbitalElements, mu: f64) -> (Vector3, Vector3) {
 /// * `elements` - Classical orbital elements (a, e, i, Ω, ω, ν)
 ///
 /// # Returns
-/// Modified equinoctial elements (p, f, g, h, k, L)
+/// Modified equinoctial elements (p, f, g, h, k, l)
 ///
 /// # Formulas
 /// - p = a(1 - e²)
@@ -503,7 +503,7 @@ pub fn coe_to_rv(elements: &OrbitalElements, mu: f64) -> (Vector3, Vector3) {
 /// - g = e·sin(ω + Ω)
 /// - h = tan(i/2)·cos(Ω)
 /// - k = tan(i/2)·sin(Ω)
-/// - L = Ω + ω + ν
+/// - l = Ω + ω + ν
 ///
 /// # Example
 /// ```
@@ -543,15 +543,15 @@ pub fn coe_to_equinoctial(elements: &OrbitalElements) -> EquinoctialElements {
     let k = tan_half_i * raan.sin();
 
     // True longitude
-    let L = raan + argp + nu;
+    let l = raan + argp + nu;
 
-    EquinoctialElements::new(p, f, g, h, k, L)
+    EquinoctialElements::new(p, f, g, h, k, l)
 }
 
 /// Convert modified equinoctial elements to classical orbital elements
 ///
 /// # Arguments
-/// * `elements` - Modified equinoctial elements (p, f, g, h, k, L)
+/// * `elements` - Modified equinoctial elements (p, f, g, h, k, l)
 /// * `tol` - Tolerance for singularity checks (default: 1e-8)
 ///
 /// # Returns
@@ -562,7 +562,7 @@ pub fn coe_to_equinoctial(elements: &OrbitalElements) -> EquinoctialElements {
 /// - i = 2·arctan(√(h² + k²))
 /// - Ω = atan2(k, h)
 /// - ω = atan2(g, f) - Ω
-/// - ν = L - atan2(g, f)
+/// - ν = l - atan2(g, f)
 /// - a = p / (1 - e²)
 ///
 /// # Edge Cases
@@ -582,7 +582,7 @@ pub fn coe_to_equinoctial(elements: &OrbitalElements) -> EquinoctialElements {
 ///     0.0,       // g: ecc y-component
 ///     0.044,     // h: inc x-component
 ///     0.0,       // k: inc y-component
-///     0.5,       // L: true longitude
+///     0.5,       // l: true longitude
 /// );
 /// let elements = equinoctial_to_coe(&eq_elements, 1e-8).unwrap();
 /// ```
@@ -596,7 +596,7 @@ pub fn equinoctial_to_coe(
         g,
         h,
         k,
-        L,
+        l,
     } = *elements;
 
     // Calculate eccentricity
@@ -629,26 +629,26 @@ pub fn equinoctial_to_coe(
         if e < tol {
             // Circular equatorial: both Ω and ω undefined
             let argp = 0.0;
-            let nu = normalize_angle(L);
+            let nu = normalize_angle(l);
             (raan, argp, nu)
         } else {
             // Eccentric equatorial: ω measured from x-axis
             let argp = normalize_angle(g.atan2(f));
-            let nu = normalize_angle(L - argp);
+            let nu = normalize_angle(l - argp);
             (raan, argp, nu)
         }
     } else if e < tol {
         // Circular inclined: ω undefined
         let raan = normalize_angle(k.atan2(h));
         let argp = 0.0;
-        let nu = normalize_angle(L - raan);
+        let nu = normalize_angle(l - raan);
         (raan, argp, nu)
     } else {
         // General case
         let raan = normalize_angle(k.atan2(h));
         let argp_plus_raan = g.atan2(f);
         let argp = normalize_angle(argp_plus_raan - raan);
-        let nu = normalize_angle(L - argp_plus_raan);
+        let nu = normalize_angle(l - argp_plus_raan);
         (raan, argp, nu)
     };
 
@@ -664,7 +664,7 @@ pub fn equinoctial_to_coe(
 /// * `tol` - Tolerance for singularity checks (default: 1e-8)
 ///
 /// # Returns
-/// Modified equinoctial elements (p, f, g, h, k, L)
+/// Modified equinoctial elements (p, f, g, h, k, l)
 ///
 /// # Strategy
 /// Converts via classical orbital elements: rv → coe → equinoctial
@@ -692,7 +692,7 @@ pub fn rv_to_equinoctial(
 /// Convert modified equinoctial elements to Cartesian state vectors
 ///
 /// # Arguments
-/// * `elements` - Modified equinoctial elements (p, f, g, h, k, L)
+/// * `elements` - Modified equinoctial elements (p, f, g, h, k, l)
 /// * `mu` - Standard gravitational parameter (m³/s²)
 /// * `tol` - Tolerance for singularity checks (default: 1e-8)
 ///

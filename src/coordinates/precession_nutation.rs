@@ -290,7 +290,7 @@ pub fn iau2006_precession_matrix(jd1: f64, jd2: f64) -> Matrix3<f64> {
 ///
 /// This is a simplified implementation. For applications requiring milliarcsecond
 /// precision, consider using astropy or implementing the full IAU 2000A series.
-pub fn simplified_nutation_matrix(jd1: f64, jd2: f64) -> Matrix3<f64> {
+pub fn simplified_nutation_matrix(_jd1: f64, _jd2: f64) -> Matrix3<f64> {
     // For now, return identity matrix (no nutation correction)
     // TODO: Implement simplified nutation model (IAU 2000B with 77 terms)
     // or full IAU 2000A if needed

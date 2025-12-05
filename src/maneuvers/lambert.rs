@@ -468,7 +468,7 @@ impl Lambert {
         const TOL: f64 = 1e-8;
         let mut converged = false;
 
-        for iter in 0..MAX_ITER {
+        for _ in 0..MAX_ITER {
             let t_calc = time_of_flight_izzo(x, lambda, revs as i32);
             let error = t_calc - t_dimensionless;
 
@@ -484,7 +484,7 @@ impl Lambert {
             }
 
             // Calculate derivatives using Householder method
-            let (dt_dx, d2t_dx2, d3t_dx3) = time_derivatives_izzo(x, lambda, revs as i32);
+            let (dt_dx, _, _) = time_derivatives_izzo(x, lambda, revs as i32);
 
             // Debug derivatives
             // #[cfg(test)]
@@ -650,7 +650,7 @@ impl Lambert {
             let mut x_old = 0.0;
             let mut t_min = t0;
             for _ in 0..12 {
-                let (dt, ddt, dddt) = dTdx_pykep(x_old, t_min, lambda);
+                let (dt, ddt, dddt) = dt_dx_pykep(x_old, t_min, lambda);
                 if dt.abs() < 1e-15 {
                     break;
                 }
@@ -687,7 +687,7 @@ impl Lambert {
             } else if t_normalized <= t1 {
                 t1 * (t1 - t_normalized) / (0.4 * (1.0 - lambda2 * lambda3) * t_normalized) + 1.0
             } else {
-                (t_normalized / t00).powf(0.69314718055994529 / (t1 / t00).ln()) - 1.0
+                (t_normalized / t00).powf(0.693_147_180_559_945_3 / (t1 / t00).ln()) - 1.0
             }
         } else {
             // Multi-rev initial guess (left branch - lower energy)
@@ -828,70 +828,6 @@ impl Lambert {
     }
 }
 
-/// Calculate Stumpff functions C(z) and S(z)
-///
-/// These functions generalize sine and cosine to handle elliptic, parabolic,
-/// and hyperbolic orbits in a unified framework.
-///
-/// # Arguments
-///
-/// * `z` - Universal variable
-///
-/// # Returns
-///
-/// Tuple (C(z), S(z)) of Stumpff function values
-fn stumpff_functions(z: f64) -> (f64, f64) {
-    const TOL: f64 = 1e-6;
-
-    if z > TOL {
-        // Elliptic orbit (z > 0)
-        let sqrt_z = z.sqrt();
-        let c2 = (1.0 - sqrt_z.cos()) / z;
-        let c3 = (sqrt_z - sqrt_z.sin()) / (z * sqrt_z);
-        (c2, c3)
-    } else if z < -TOL {
-        // Hyperbolic orbit (z < 0)
-        let sqrt_neg_z = (-z).sqrt();
-        let c2 = (1.0 - sqrt_neg_z.cosh()) / z;
-        let c3 = (sqrt_neg_z.sinh() - sqrt_neg_z) / (z * sqrt_neg_z);
-        (c2, c3)
-    } else {
-        // Parabolic orbit (z ≈ 0) - use series expansion
-        let c2 = 0.5 - z / 24.0 + z * z / 720.0;
-        let c3 = 1.0 / 6.0 - z / 120.0 + z * z / 5040.0;
-        (c2, c3)
-    }
-}
-
-/// Calculate derivatives of Stumpff functions
-///
-/// Used in Newton-Raphson iteration for faster convergence.
-///
-/// # Arguments
-///
-/// * `z` - Universal variable
-/// * `c2` - Stumpff function C(z)
-/// * `c3` - Stumpff function S(z)
-///
-/// # Returns
-///
-/// Tuple (C'(z), S'(z)) of Stumpff function derivatives
-fn stumpff_derivatives(z: f64, c2: f64, c3: f64) -> (f64, f64) {
-    const TOL: f64 = 1e-6;
-
-    if z.abs() < TOL {
-        // Near-parabolic - use series expansion
-        let c2_prime = -1.0 / 24.0 + z / 360.0;
-        let c3_prime = -1.0 / 120.0 + z / 2520.0;
-        (c2_prime, c3_prime)
-    } else {
-        // General case
-        let c2_prime = (1.0 - 2.0 * c2) / (2.0 * z);
-        let c3_prime = (c2 - 3.0 * c3) / (2.0 * z);
-        (c2_prime, c3_prime)
-    }
-}
-
 /// Calculate dimensionless time of flight for Izzo's algorithm
 ///
 /// This function computes the time of flight in Izzo's parameterization
@@ -928,11 +864,11 @@ fn time_of_flight_izzo(x: f64, lambda: f64, n: i32) -> f64 {
         };
 
         // Time formula (PyKEP): tof = a^(3/2) * ((α - sin(α)) - (β - sin(β)) + 2πN) / 2
-        let tof = sqrt_a * a
-            * ((alpha - alpha.sin()) - (beta - beta.sin()) + 2.0 * PI * n as f64)
-            / 2.0;
+        
 
-        tof
+        sqrt_a * a
+            * ((alpha - alpha.sin()) - (beta - beta.sin()) + 2.0 * PI * n as f64)
+            / 2.0
     } else {
         // Invalid or hyperbolic - return large value
         1e10
@@ -994,7 +930,7 @@ fn householder_pykep(
 ) -> (f64, bool) {
     for _ in 0..max_iter {
         let tof = x2tof_pykep(x, lambda, n);
-        let (dt, ddt, dddt) = dTdx_pykep(x, tof, lambda);
+        let (dt, ddt, dddt) = dt_dx_pykep(x, tof, lambda);
         let delta = tof - t_target;
 
         if delta.abs() < eps {
@@ -1016,7 +952,7 @@ fn householder_pykep(
 /// Analytical derivatives of TOF with respect to x (PyKEP formula)
 ///
 /// Returns (dT/dx, d²T/dx², d³T/dx³)
-fn dTdx_pykep(x: f64, t: f64, lambda: f64) -> (f64, f64, f64) {
+fn dt_dx_pykep(x: f64, t: f64, lambda: f64) -> (f64, f64, f64) {
     let l2 = lambda * lambda;
     let l3 = l2 * lambda;
     let umx2 = 1.0 - x * x;
@@ -1550,39 +1486,6 @@ mod tests {
 
         // Should be elliptic orbit (positive semi-major axis)
         assert!(solution.a > 0.0);
-    }
-
-    #[test]
-    fn test_lambert_stumpff_edge_cases() {
-        // Test Stumpff functions at boundaries
-        use super::stumpff_functions;
-
-        // Near-zero (parabolic)
-        let (c2, c3) = stumpff_functions(0.0);
-        assert!((c2 - 0.5).abs() < 1e-10);
-        assert!((c3 - 1.0/6.0).abs() < 1e-10);
-
-        // Small positive (near-parabolic elliptic)
-        let (c2_small, c3_small) = stumpff_functions(0.001);
-        assert!(c2_small > 0.0); // Should be positive for elliptic
-        assert!(c3_small > 0.0); // Should be positive for elliptic
-
-        // Small negative (near-parabolic hyperbolic)
-        let (c2_neg, c3_neg) = stumpff_functions(-0.001);
-        assert!(c2_neg > 0.0); // c2 is always positive
-        // c3 is NEGATIVE for hyperbolic orbits (z < 0) - this is mathematically correct
-        assert!(c3_neg < 0.0, "c3 should be negative for hyperbolic orbits");
-
-        // Large positive (high-energy elliptic)
-        let (c2_large, c3_large) = stumpff_functions(100.0);
-        assert!(c2_large > 0.0);
-        assert!(c3_large > 0.0);
-
-        // Large negative (high-energy hyperbolic)
-        let (c2_hyp, c3_hyp) = stumpff_functions(-100.0);
-        assert!(c2_hyp > 0.0); // c2 is always positive
-        // c3 is negative for hyperbolic orbits
-        assert!(c3_hyp < 0.0, "c3 should be negative for hyperbolic orbits");
     }
 
     #[test]

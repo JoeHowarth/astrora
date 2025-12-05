@@ -369,13 +369,12 @@ pub fn solar_beta_angle_precise(
 /// let altitude = 600e3; // m
 /// let a = EARTH_RADIUS + altitude;
 ///
-/// let inclination = sun_synchronous_inclination(a, 0.0, EARTH_J2, EARTH_RADIUS, EARTH_MU)?;
+/// let inclination = sun_synchronous_inclination(a, EARTH_J2, EARTH_RADIUS, EARTH_MU)?;
 /// println!("Sun-sync inclination: {:.2}°", inclination.to_degrees());
 /// // Output: ~97.8° (retrograde orbit)
 /// ```
 pub fn sun_synchronous_inclination(
     semi_major_axis: f64,
-    eccentricity: f64,
     j2: f64,
     earth_radius: f64,
     mu: f64,
@@ -560,7 +559,7 @@ mod tests {
         let altitude = 600e3; // 600 km
         let a = R_EARTH + altitude;
 
-        let inclination = sun_synchronous_inclination(a, 0.0, J2_EARTH, R_EARTH, GM_EARTH).unwrap();
+        let inclination = sun_synchronous_inclination(a, J2_EARTH, R_EARTH, GM_EARTH).unwrap();
 
         // Should be around 97-98° (retrograde)
         assert_relative_eq!(inclination.to_degrees(), 97.8, epsilon = 0.5);
@@ -573,7 +572,7 @@ mod tests {
         let altitude = 800e3; // 800 km
         let a = R_EARTH + altitude;
 
-        let inclination = sun_synchronous_inclination(a, 0.0, J2_EARTH, R_EARTH, GM_EARTH).unwrap();
+        let inclination = sun_synchronous_inclination(a, J2_EARTH, R_EARTH, GM_EARTH).unwrap();
 
         // Should be slightly higher than 600 km case
         assert!((97.0..99.0).contains(&inclination.to_degrees()));

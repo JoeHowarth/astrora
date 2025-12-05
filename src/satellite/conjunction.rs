@@ -328,7 +328,6 @@ fn propagate_kepler(r0: &Vector3, v0: &Vector3, mu: f64, dt: f64) -> (Vector3, V
 
         let (c2, c3) = stumpff_c(psi);
 
-        let r = r0_mag + vr0 * chi2 * c2 / (mu).sqrt() + (1.0 - r0_mag / a) * chi3 * c3;
         let f_chi = r0_mag * vr0 * chi2 * c2 / (mu).sqrt()
                     + (1.0 - r0_mag / a) * chi3 * c3
                     + r0_mag * chi
@@ -406,8 +405,7 @@ fn golden_section_search<F>(f: F, mut a: f64, mut b: f64, tol: f64) -> f64
 where
     F: Fn(f64) -> f64,
 {
-    const PHI: f64 = 1.618033988749895; // Golden ratio
-    const RESPHI: f64 = 0.618033988749895; // 2 - phi
+    const RESPHI: f64 = 0.618033988749895; // 2 - phi (where phi = golden ratio)
 
     // Initial points
     let mut x1 = b - RESPHI * (b - a);
