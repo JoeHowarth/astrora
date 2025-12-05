@@ -2,11 +2,8 @@
 //!
 //! This module defines a comprehensive error hierarchy for orbital mechanics
 //! computations, including numerical failures, physical constraint violations,
-//! and conversion errors. All errors integrate seamlessly with PyO3 for
-//! automatic conversion to Python exceptions.
+//! and conversion errors.
 
-use pyo3::exceptions::{PyRuntimeError, PyValueError, PyTypeError, PyArithmeticError};
-use pyo3::PyErr;
 use thiserror::Error;
 
 /// Main error type for astrora operations
@@ -258,75 +255,6 @@ pub enum PoliastroError {
 /// Note: The type is still called PoliastroError/PoliastroResult internally
 /// for backward compatibility, but represents astrora's error handling.
 pub type PoliastroResult<T> = Result<T, PoliastroError>;
-
-// ============================================================================
-// PyO3 Integration
-// ============================================================================
-
-impl From<PoliastroError> for PyErr {
-    /// Convert PoliastroError to Python exception
-    ///
-    /// Maps different error variants to appropriate Python exception types:
-    /// - Numerical errors → ArithmeticError
-    /// - Invalid parameters → ValueError
-    /// - Not implemented → NotImplementedError (via RuntimeError)
-    /// - Internal errors → RuntimeError
-    fn from(err: PoliastroError) -> PyErr {
-        use PoliastroError::*;
-
-        match err {
-            // Numerical/mathematical errors → ArithmeticError
-            ConvergenceFailure { .. }
-            | DivisionByZero { .. }
-            | NumericalInstability { .. }
-            | SingularMatrix { .. } => PyArithmeticError::new_err(err.to_string()),
-
-            // Invalid numerical values → ValueError
-            InvalidNumericalValue { .. } => PyValueError::new_err(err.to_string()),
-
-            // Physical constraint violations → ValueError
-            InvalidParameter { .. }
-            | InvalidEccentricity { .. }
-            | InvalidSemiMajorAxis { .. }
-            | InvalidInclination { .. }
-            | InvalidAngle { .. }
-            | EnergyNotConserved { .. }
-            | MomentumNotConserved { .. } => PyValueError::new_err(err.to_string()),
-
-            // State and coordinate errors → ValueError
-            InvalidStateVector { .. }
-            | ZeroPosition { .. }
-            | ZeroVelocity { .. }
-            | OrbitalSingularity { .. } => PyValueError::new_err(err.to_string()),
-
-            // Transformation errors → RuntimeError
-            TransformationFailure { .. } => PyRuntimeError::new_err(err.to_string()),
-
-            // Integration errors → RuntimeError
-            IntegrationFailure { .. }
-            | PropagationDivergence { .. }
-            | PropagationFailed { .. } => PyRuntimeError::new_err(err.to_string()),
-
-            // Validation errors → ValueError
-            OutOfRange { .. }
-            | InvalidTime { .. }
-            | MissingParameter { .. }
-            | TimeStepTooLarge { .. } => PyValueError::new_err(err.to_string()),
-
-            // Unit errors → TypeError
-            IncompatibleUnits { .. } => PyTypeError::new_err(err.to_string()),
-
-            // Orbit type errors → ValueError
-            UnsupportedOrbitType { .. }
-            | AmbiguousOrbitType { .. } => PyValueError::new_err(err.to_string()),
-
-            // General errors → RuntimeError
-            ComputationError { .. }
-            | NotImplemented { .. }
-            | InternalError { .. } => PyRuntimeError::new_err(err.to_string()),
-        }
-    }
-}
 
 // ============================================================================
 // Convenience Constructors

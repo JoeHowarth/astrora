@@ -46,8 +46,6 @@
 //! - IERS Conventions (2010): <https://www.iers.org/IERS/EN/Publications/TechnicalNotes/tn36.html>
 
 use nalgebra::{Vector3, Matrix3};
-use pyo3::prelude::*;
-use numpy::{PyArray1, PyReadonlyArray1};
 use crate::core::PoliastroResult;
 use crate::core::time::Epoch;
 use hifitime::TimeScale;
@@ -77,78 +75,12 @@ use rayon::prelude::*;
 /// let velocity = Vector3::new(0.0, 29780.0, 0.0);
 /// let frame = ICRS::new(position, velocity);
 /// ```
-#[pyclass(module = "astrora._core")]
 #[derive(Debug, Clone, PartialEq)]
 pub struct ICRS {
     /// Position vector in ICRS frame (meters, barycentric)
     pub position: Vector3<f64>,
     /// Velocity vector in ICRS frame (m/s, barycentric)
     pub velocity: Vector3<f64>,
-}
-
-#[pymethods]
-impl ICRS {
-    /// Create a new ICRS coordinate frame
-    ///
-    /// # Arguments
-    /// - `position`: Position vector in meters (barycentric) [x, y, z]
-    /// - `velocity`: Velocity vector in m/s (barycentric) [vx, vy, vz]
-    #[new]
-    pub fn py_new(position: PyReadonlyArray1<f64>, velocity: PyReadonlyArray1<f64>) -> PyResult<Self> {
-        let pos_slice = position.as_slice()?;
-        let vel_slice = velocity.as_slice()?;
-
-        if pos_slice.len() != 3 || vel_slice.len() != 3 {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "Position and velocity must be 3-element arrays"
-            ));
-        }
-
-        Ok(Self {
-            position: Vector3::new(pos_slice[0], pos_slice[1], pos_slice[2]),
-            velocity: Vector3::new(vel_slice[0], vel_slice[1], vel_slice[2]),
-        })
-    }
-
-    /// Get the position vector
-    #[getter]
-    pub fn get_position<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
-        PyArray1::from_slice_bound(py, self.position.as_slice())
-    }
-
-    /// Get the velocity vector
-    #[getter]
-    pub fn get_velocity<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
-        PyArray1::from_slice_bound(py, self.velocity.as_slice())
-    }
-
-    /// Convert to GCRS frame
-    ///
-    /// This is a simple conversion that assumes the axes are aligned (which they are).
-    /// For full accuracy, a barycentric correction would be needed (Earth's position
-    /// relative to solar system barycenter, ~1 AU offset). For Earth satellite work,
-    /// this correction is typically negligible.
-    ///
-    /// # Arguments
-    /// - `epoch`: Time of observation (for future barycentric corrections)
-    pub fn to_gcrs(&self, epoch: &Epoch) -> PoliastroResult<GCRS> {
-        // Version 1: Simple conversion with aligned axes
-        // Future enhancement: Add barycentric correction using JPL ephemerides
-        Ok(GCRS {
-            position: self.position,
-            velocity: self.velocity,
-            obstime: *epoch,
-        })
-    }
-
-    /// String representation
-    fn __repr__(&self) -> String {
-        format!(
-            "ICRS(position=[{:.3e}, {:.3e}, {:.3e}] m, velocity=[{:.3e}, {:.3e}, {:.3e}] m/s)",
-            self.position.x, self.position.y, self.position.z,
-            self.velocity.x, self.velocity.y, self.velocity.z
-        )
-    }
 }
 
 impl ICRS {
@@ -178,6 +110,20 @@ impl ICRS {
     pub fn velocity(&self) -> &Vector3<f64> {
         &self.velocity
     }
+
+    /// Convert to GCRS frame
+    ///
+    /// This is a simple conversion that assumes the axes are aligned (which they are).
+    /// For full accuracy, a barycentric correction would be needed (Earth's position
+    /// relative to solar system barycenter, ~1 AU offset). For Earth satellite work,
+    /// this correction is typically negligible.
+    pub fn to_gcrs(&self, epoch: &Epoch) -> PoliastroResult<GCRS> {
+        Ok(GCRS {
+            position: self.position,
+            velocity: self.velocity,
+            obstime: *epoch,
+        })
+    }
 }
 
 /// Geocentric Celestial Reference System (GCRS)
@@ -206,7 +152,6 @@ impl ICRS {
 /// let epoch = Epoch::from_gregorian_utc(2024, 1, 1, 0, 0, 0, 0);
 /// let frame = GCRS::new(position, velocity, epoch);
 /// ```
-#[pyclass(module = "astrora._core")]
 #[derive(Debug, Clone, PartialEq)]
 pub struct GCRS {
     /// Position vector in GCRS frame (meters, geocentric)
@@ -217,150 +162,20 @@ pub struct GCRS {
     pub obstime: Epoch,
 }
 
-#[pymethods]
-impl GCRS {
-    /// Create a new GCRS coordinate frame
-    ///
-    /// # Arguments
-    /// - `position`: Position vector in meters (geocentric) [x, y, z]
-    /// - `velocity`: Velocity vector in m/s (geocentric) [vx, vy, vz]
-    /// - `obstime`: Observation epoch
-    #[new]
-    pub fn py_new(
-        position: PyReadonlyArray1<f64>,
-        velocity: PyReadonlyArray1<f64>,
-        obstime: Epoch,
-    ) -> PyResult<Self> {
-        let pos_slice = position.as_slice()?;
-        let vel_slice = velocity.as_slice()?;
-
-        if pos_slice.len() != 3 || vel_slice.len() != 3 {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "Position and velocity must be 3-element arrays"
-            ));
-        }
-
-        Ok(Self {
-            position: Vector3::new(pos_slice[0], pos_slice[1], pos_slice[2]),
-            velocity: Vector3::new(vel_slice[0], vel_slice[1], vel_slice[2]),
-            obstime,
-        })
-    }
-
-    /// Get the position vector
-    #[getter]
-    pub fn get_position<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
-        PyArray1::from_slice_bound(py, self.position.as_slice())
-    }
-
-    /// Get the velocity vector
-    #[getter]
-    pub fn get_velocity<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
-        PyArray1::from_slice_bound(py, self.velocity.as_slice())
-    }
-
-    /// Get the observation time
-    #[getter]
-    pub fn get_obstime(&self) -> Epoch {
-        self.obstime
-    }
-
-    /// Convert to ICRS frame
-    ///
-    /// This is a simple conversion that assumes the axes are aligned (which they are).
-    /// For full accuracy, a barycentric correction would be needed (Earth's position
-    /// relative to solar system barycenter). For Earth satellite work, this correction
-    /// is typically negligible.
-    pub fn to_icrs(&self) -> PoliastroResult<ICRS> {
-        // Version 1: Simple conversion with aligned axes
-        // Future enhancement: Add barycentric correction using JPL ephemerides
-        Ok(ICRS {
-            position: self.position,
-            velocity: self.velocity,
-        })
-    }
-
-    /// Convert to ITRS frame
-    ///
-    /// This transformation rotates the GCRS (inertial) coordinates into
-    /// ITRS (Earth-fixed) coordinates using the Earth Rotation Angle (ERA).
-    ///
-    /// # V1 Implementation
-    /// - Uses simplified ERA rotation about the polar (z) axis
-    /// - Ignores precession, nutation, and polar motion
-    /// - Suitable for most satellite tracking applications (10-100m accuracy)
-    ///
-    /// # Returns
-    /// ITRS coordinate frame at the same observation time
-    pub fn to_itrs(&self) -> PoliastroResult<ITRS> {
-        // Calculate ERA at observation time
-        let era = earth_rotation_angle(&self.obstime);
-
-        // Rotation matrix: GCRS → ITRS is R_z(+ERA)
-        // (rotating FROM inertial TO Earth-fixed means rotating forwards)
-        let rotation = rotation_z(era);
-
-        // Transform position
-        let itrs_position = rotation * self.position;
-
-        // Transform velocity (includes Coriolis term from Earth's rotation)
-        // v_itrs = R * v_gcrs - ω × R * r_gcrs
-        // where ω is Earth's angular velocity vector [0, 0, ω_earth]
-        let omega_earth = 7.2921150e-5; // rad/s (from IERS)
-        let omega_vec = Vector3::new(0.0, 0.0, omega_earth);
-
-        let itrs_velocity = rotation * self.velocity - omega_vec.cross(&itrs_position);
-
-        Ok(ITRS {
-            position: itrs_position,
-            velocity: itrs_velocity,
-            obstime: self.obstime,
-        })
-    }
-
-    /// String representation
-    fn __repr__(&self) -> String {
-        let (y, m, d, h, min, s, _) = self.obstime.to_gregorian_utc();
-        format!(
-            "GCRS(position=[{:.3e}, {:.3e}, {:.3e}] m, velocity=[{:.3e}, {:.3e}, {:.3e}] m/s, obstime={:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z)",
-            self.position.x, self.position.y, self.position.z,
-            self.velocity.x, self.velocity.y, self.velocity.z,
-            y, m, d, h, min, s
-        )
-    }
-}
-
 impl GCRS {
     /// Create a new GCRS coordinate frame (internal Rust API)
-    ///
-    /// # Arguments
-    /// - `position`: Position vector in meters (geocentric)
-    /// - `velocity`: Velocity vector in m/s (geocentric)
-    /// - `obstime`: Observation epoch
     pub fn new(position: Vector3<f64>, velocity: Vector3<f64>, obstime: Epoch) -> Self {
-        Self {
-            position,
-            velocity,
-            obstime,
-        }
+        Self { position, velocity, obstime }
     }
 
     /// Create GCRS from position only (zero velocity) at J2000 epoch
     pub fn from_position(position: Vector3<f64>) -> Self {
-        Self {
-            position,
-            velocity: Vector3::zeros(),
-            obstime: Epoch::j2000(),
-        }
+        Self { position, velocity: Vector3::zeros(), obstime: Epoch::j2000() }
     }
 
     /// Create GCRS from position at specified epoch
     pub fn from_position_epoch(position: Vector3<f64>, obstime: Epoch) -> Self {
-        Self {
-            position,
-            velocity: Vector3::zeros(),
-            obstime,
-        }
+        Self { position, velocity: Vector3::zeros(), obstime }
     }
 
     /// Get the position vector
@@ -376,6 +191,22 @@ impl GCRS {
     /// Get the observation time
     pub fn obstime(&self) -> &Epoch {
         &self.obstime
+    }
+
+    /// Convert to ICRS frame
+    pub fn to_icrs(&self) -> PoliastroResult<ICRS> {
+        Ok(ICRS { position: self.position, velocity: self.velocity })
+    }
+
+    /// Convert to ITRS frame
+    pub fn to_itrs(&self) -> PoliastroResult<ITRS> {
+        let era = earth_rotation_angle(&self.obstime);
+        let rotation = rotation_z(era);
+        let itrs_position = rotation * self.position;
+        let omega_earth = 7.2921150e-5;
+        let omega_vec = Vector3::new(0.0, 0.0, omega_earth);
+        let itrs_velocity = rotation * self.velocity - omega_vec.cross(&itrs_position);
+        Ok(ITRS { position: itrs_position, velocity: itrs_velocity, obstime: self.obstime })
     }
 }
 
@@ -526,7 +357,6 @@ pub fn greenwich_mean_sidereal_time_82(epoch: &Epoch) -> f64 {
 /// - Polar motion corrections from IERS EOP data
 /// - TIO (Terrestrial Intermediate Origin) locator
 /// - CIP (Celestial Intermediate Pole) position
-#[pyclass(module = "astrora._core")]
 #[derive(Debug, Clone, PartialEq)]
 pub struct ITRS {
     /// Position vector in ITRS frame (meters, Earth-fixed)
@@ -537,164 +367,15 @@ pub struct ITRS {
     pub obstime: Epoch,
 }
 
-#[pymethods]
 impl ITRS {
     /// Create a new ITRS coordinate frame
-    ///
-    /// # Arguments
-    /// - `position`: Position vector in meters (Earth-fixed) [x, y, z]
-    /// - `velocity`: Velocity vector in m/s (Earth-fixed) [vx, vy, vz]
-    /// - `obstime`: Observation epoch
-    #[new]
-    pub fn py_new(
-        position: PyReadonlyArray1<f64>,
-        velocity: PyReadonlyArray1<f64>,
-        obstime: Epoch,
-    ) -> PyResult<Self> {
-        let pos_slice = position.as_slice()?;
-        let vel_slice = velocity.as_slice()?;
-
-        if pos_slice.len() != 3 || vel_slice.len() != 3 {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "Position and velocity must be 3-element arrays"
-            ));
-        }
-
-        Ok(Self {
-            position: Vector3::new(pos_slice[0], pos_slice[1], pos_slice[2]),
-            velocity: Vector3::new(vel_slice[0], vel_slice[1], vel_slice[2]),
-            obstime,
-        })
-    }
-
-    /// Get the position vector
-    #[getter]
-    pub fn get_position<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
-        PyArray1::from_slice_bound(py, self.position.as_slice())
-    }
-
-    /// Get the velocity vector
-    #[getter]
-    pub fn get_velocity<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
-        PyArray1::from_slice_bound(py, self.velocity.as_slice())
-    }
-
-    /// Get the observation time
-    #[getter]
-    pub fn get_obstime(&self) -> Epoch {
-        self.obstime
-    }
-
-    /// Convert to TEME frame
-    ///
-    /// This transformation rotates the ITRS (Earth-fixed) coordinates into
-    /// TEME (inertial) coordinates using Greenwich Mean Sidereal Time (GMST82).
-    ///
-    /// # V1 Implementation
-    /// - Uses IAU 1982 GMST rotation about the polar (z) axis
-    /// - Ignores polar motion corrections
-    /// - Suitable for TLE-based satellite tracking (~10-100m accuracy)
-    ///
-    /// # Returns
-    /// TEME coordinate frame at the same observation time
-    pub fn to_teme(&self) -> PoliastroResult<TEME> {
-        // Calculate GMST82 at observation time
-        let gmst = greenwich_mean_sidereal_time_82(&self.obstime);
-
-        // Rotation matrix: ITRS → TEME is R_z(-GMST)
-        // (rotating FROM Earth-fixed TO inertial means rotating backwards)
-        let rotation = rotation_z(-gmst);
-
-        // Transform position
-        let teme_position = rotation * self.position;
-
-        // Transform velocity (includes Coriolis term from Earth's rotation)
-        // v_teme = R * v_itrs + ω × R * r_itrs
-        // where ω is Earth's angular velocity vector [0, 0, ω_earth]
-        let omega_earth = 7.2921150e-5; // rad/s (from IERS)
-        let omega_vec = Vector3::new(0.0, 0.0, omega_earth);
-
-        let teme_velocity = rotation * self.velocity + omega_vec.cross(&teme_position);
-
-        Ok(TEME {
-            position: teme_position,
-            velocity: teme_velocity,
-            obstime: self.obstime,
-        })
-    }
-
-    /// Convert to GCRS frame
-    ///
-    /// This transformation rotates the ITRS (Earth-fixed) coordinates into
-    /// GCRS (inertial) coordinates using the Earth Rotation Angle (ERA).
-    ///
-    /// # V1 Implementation
-    /// - Uses simplified ERA rotation about the polar (z) axis
-    /// - Ignores precession, nutation, and polar motion
-    /// - Suitable for most satellite tracking applications (10-100m accuracy)
-    ///
-    /// # Returns
-    /// GCRS coordinate frame at the same observation time
-    pub fn to_gcrs(&self) -> PoliastroResult<GCRS> {
-        // Calculate ERA at observation time
-        let era = earth_rotation_angle(&self.obstime);
-
-        // Rotation matrix: ITRS → GCRS is R_z(-ERA)
-        // (rotating FROM Earth-fixed TO inertial means rotating backwards)
-        let rotation = rotation_z(-era);
-
-        // Transform position
-        let gcrs_position = rotation * self.position;
-
-        // Transform velocity (includes Coriolis term from Earth's rotation)
-        // v_gcrs = R * v_itrs + ω × R * r_itrs
-        // where ω is Earth's angular velocity vector [0, 0, ω_earth]
-        let omega_earth = 7.2921150e-5; // rad/s (from IERS)
-        let omega_vec = Vector3::new(0.0, 0.0, omega_earth);
-
-        let gcrs_velocity = rotation * self.velocity + omega_vec.cross(&gcrs_position);
-
-        Ok(GCRS {
-            position: gcrs_position,
-            velocity: gcrs_velocity,
-            obstime: self.obstime,
-        })
-    }
-
-    /// String representation
-    fn __repr__(&self) -> String {
-        let (y, m, d, h, min, s, _) = self.obstime.to_gregorian_utc();
-        format!(
-            "ITRS(position=[{:.3e}, {:.3e}, {:.3e}] m, velocity=[{:.3e}, {:.3e}, {:.3e}] m/s, obstime={:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z)",
-            self.position.x, self.position.y, self.position.z,
-            self.velocity.x, self.velocity.y, self.velocity.z,
-            y, m, d, h, min, s
-        )
-    }
-}
-
-impl ITRS {
-    /// Create a new ITRS coordinate frame (internal Rust API)
-    ///
-    /// # Arguments
-    /// - `position`: Position vector in meters (Earth-fixed)
-    /// - `velocity`: Velocity vector in m/s (Earth-fixed)
-    /// - `obstime`: Observation epoch
     pub fn new(position: Vector3<f64>, velocity: Vector3<f64>, obstime: Epoch) -> Self {
-        Self {
-            position,
-            velocity,
-            obstime,
-        }
+        Self { position, velocity, obstime }
     }
 
     /// Create ITRS from position only (zero velocity)
     pub fn from_position(position: Vector3<f64>, obstime: Epoch) -> Self {
-        Self {
-            position,
-            velocity: Vector3::zeros(),
-            obstime,
-        }
+        Self { position, velocity: Vector3::zeros(), obstime }
     }
 
     /// Get the position vector
@@ -710,6 +391,28 @@ impl ITRS {
     /// Get the observation time
     pub fn obstime(&self) -> &Epoch {
         &self.obstime
+    }
+
+    /// Convert to TEME frame
+    pub fn to_teme(&self) -> PoliastroResult<TEME> {
+        let gmst = greenwich_mean_sidereal_time_82(&self.obstime);
+        let rotation = rotation_z(-gmst);
+        let teme_position = rotation * self.position;
+        let omega_earth = 7.2921150e-5;
+        let omega_vec = Vector3::new(0.0, 0.0, omega_earth);
+        let teme_velocity = rotation * self.velocity + omega_vec.cross(&teme_position);
+        Ok(TEME { position: teme_position, velocity: teme_velocity, obstime: self.obstime })
+    }
+
+    /// Convert to GCRS frame
+    pub fn to_gcrs(&self) -> PoliastroResult<GCRS> {
+        let era = earth_rotation_angle(&self.obstime);
+        let rotation = rotation_z(-era);
+        let gcrs_position = rotation * self.position;
+        let omega_earth = 7.2921150e-5;
+        let omega_vec = Vector3::new(0.0, 0.0, omega_earth);
+        let gcrs_velocity = rotation * self.velocity + omega_vec.cross(&gcrs_position);
+        Ok(GCRS { position: gcrs_position, velocity: gcrs_velocity, obstime: self.obstime })
     }
 }
 
@@ -766,7 +469,6 @@ impl ITRS {
 /// - Vallado et al. (2006), "Revisiting Spacetrack Report #3", AIAA 2006-6753
 /// - Vallado, "Fundamentals of Astrodynamics and Applications", 4th Ed., Ch. 3
 /// - <https://celestrak.org/publications/AIAA/2006-6753/>
-#[pyclass(module = "astrora._core")]
 #[derive(Debug, Clone, PartialEq)]
 pub struct TEME {
     /// Position vector in TEME frame (meters, geocentric)
@@ -777,144 +479,15 @@ pub struct TEME {
     pub obstime: Epoch,
 }
 
-#[pymethods]
 impl TEME {
     /// Create a new TEME coordinate frame
-    ///
-    /// # Arguments
-    /// - `position`: Position vector in meters (geocentric) [x, y, z]
-    /// - `velocity`: Velocity vector in m/s (geocentric) [vx, vy, vz]
-    /// - `obstime`: Observation epoch
-    #[new]
-    pub fn py_new(
-        position: PyReadonlyArray1<f64>,
-        velocity: PyReadonlyArray1<f64>,
-        obstime: Epoch,
-    ) -> PyResult<Self> {
-        let pos_slice = position.as_slice()?;
-        let vel_slice = velocity.as_slice()?;
-
-        if pos_slice.len() != 3 || vel_slice.len() != 3 {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "Position and velocity must be 3-element arrays"
-            ));
-        }
-
-        Ok(Self {
-            position: Vector3::new(pos_slice[0], pos_slice[1], pos_slice[2]),
-            velocity: Vector3::new(vel_slice[0], vel_slice[1], vel_slice[2]),
-            obstime,
-        })
-    }
-
-    /// Get the position vector
-    #[getter]
-    pub fn get_position<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
-        PyArray1::from_slice_bound(py, self.position.as_slice())
-    }
-
-    /// Get the velocity vector
-    #[getter]
-    pub fn get_velocity<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
-        PyArray1::from_slice_bound(py, self.velocity.as_slice())
-    }
-
-    /// Get the observation time
-    #[getter]
-    pub fn get_obstime(&self) -> Epoch {
-        self.obstime
-    }
-
-    /// Convert to ITRS frame
-    ///
-    /// This transformation rotates the TEME (inertial) coordinates into
-    /// ITRS (Earth-fixed) coordinates using Greenwich Mean Sidereal Time (GMST82).
-    ///
-    /// # V1 Implementation
-    /// - Uses IAU 1982 GMST rotation about the polar (z) axis
-    /// - Ignores polar motion corrections
-    /// - Suitable for TLE-based satellite tracking (~10-100m accuracy)
-    ///
-    /// # Returns
-    /// ITRS coordinate frame at the same observation time
-    pub fn to_itrs(&self) -> PoliastroResult<ITRS> {
-        // Calculate GMST82 at observation time
-        let gmst = greenwich_mean_sidereal_time_82(&self.obstime);
-
-        // Rotation matrix: TEME → ITRS is R_z(+GMST)
-        // (rotating FROM inertial TO Earth-fixed means rotating forwards)
-        let rotation = rotation_z(gmst);
-
-        // Transform position
-        let itrs_position = rotation * self.position;
-
-        // Transform velocity (includes Coriolis term from Earth's rotation)
-        // v_itrs = R * v_teme - ω × R * r_teme
-        // where ω is Earth's angular velocity vector [0, 0, ω_earth]
-        let omega_earth = 7.2921150e-5; // rad/s (from IERS)
-        let omega_vec = Vector3::new(0.0, 0.0, omega_earth);
-
-        let itrs_velocity = rotation * self.velocity - omega_vec.cross(&itrs_position);
-
-        Ok(ITRS {
-            position: itrs_position,
-            velocity: itrs_velocity,
-            obstime: self.obstime,
-        })
-    }
-
-    /// Convert to GCRS frame
-    ///
-    /// This transformation converts TEME coordinates to GCRS by chaining
-    /// through ITRS: TEME → ITRS → GCRS.
-    ///
-    /// # V1 Implementation
-    /// - Uses GMST82 for TEME → ITRS
-    /// - Uses ERA for ITRS → GCRS
-    /// - Combined accuracy: ~10-100 meters
-    ///
-    /// # Returns
-    /// GCRS coordinate frame at the same observation time
-    pub fn to_gcrs(&self) -> PoliastroResult<GCRS> {
-        // Chain transformations: TEME → ITRS → GCRS
-        let itrs = self.to_itrs()?;
-        itrs.to_gcrs()
-    }
-
-    /// String representation
-    fn __repr__(&self) -> String {
-        let (y, m, d, h, min, s, _) = self.obstime.to_gregorian_utc();
-        format!(
-            "TEME(position=[{:.3e}, {:.3e}, {:.3e}] m, velocity=[{:.3e}, {:.3e}, {:.3e}] m/s, obstime={:04}-{:02}-{:02}T{:02}:{:02}:{:02}Z)",
-            self.position.x, self.position.y, self.position.z,
-            self.velocity.x, self.velocity.y, self.velocity.z,
-            y, m, d, h, min, s
-        )
-    }
-}
-
-impl TEME {
-    /// Create a new TEME coordinate frame (internal Rust API)
-    ///
-    /// # Arguments
-    /// - `position`: Position vector in meters (geocentric)
-    /// - `velocity`: Velocity vector in m/s (geocentric)
-    /// - `obstime`: Observation epoch
     pub fn new(position: Vector3<f64>, velocity: Vector3<f64>, obstime: Epoch) -> Self {
-        Self {
-            position,
-            velocity,
-            obstime,
-        }
+        Self { position, velocity, obstime }
     }
 
     /// Create TEME from position only (zero velocity)
     pub fn from_position(position: Vector3<f64>, obstime: Epoch) -> Self {
-        Self {
-            position,
-            velocity: Vector3::zeros(),
-            obstime,
-        }
+        Self { position, velocity: Vector3::zeros(), obstime }
     }
 
     /// Get the position vector
@@ -930,6 +503,23 @@ impl TEME {
     /// Get the observation time
     pub fn obstime(&self) -> &Epoch {
         &self.obstime
+    }
+
+    /// Convert to ITRS frame
+    pub fn to_itrs(&self) -> PoliastroResult<ITRS> {
+        let gmst = greenwich_mean_sidereal_time_82(&self.obstime);
+        let rotation = rotation_z(gmst);
+        let itrs_position = rotation * self.position;
+        let omega_earth = 7.2921150e-5;
+        let omega_vec = Vector3::new(0.0, 0.0, omega_earth);
+        let itrs_velocity = rotation * self.velocity - omega_vec.cross(&itrs_position);
+        Ok(ITRS { position: itrs_position, velocity: itrs_velocity, obstime: self.obstime })
+    }
+
+    /// Convert to GCRS frame
+    pub fn to_gcrs(&self) -> PoliastroResult<GCRS> {
+        let itrs = self.to_itrs()?;
+        itrs.to_gcrs()
     }
 }
 
@@ -982,7 +572,6 @@ impl TEME {
 /// - Curtis, "Orbital Mechanics for Engineering Students", Ch. 4
 /// - Vallado, "Fundamentals of Astrodynamics", Ch. 3
 /// - <https://orbital-mechanics.space/classical-orbital-elements/perifocal-frame.html>>
-#[pyclass(module = "astrora._core")]
 #[derive(Debug, Clone, PartialEq)]
 pub struct Perifocal {
     /// Position vector in perifocal frame (meters)
@@ -1171,126 +760,6 @@ impl Perifocal {
     }
 }
 
-#[pymethods]
-impl Perifocal {
-    /// Create a new Perifocal coordinate frame
-    ///
-    /// # Arguments
-    /// - `position`: Position vector in perifocal frame (meters) [x, y, z]
-    /// - `velocity`: Velocity vector in perifocal frame (m/s) [vx, vy, vz]
-    /// - `raan`: Right ascension of ascending node (radians)
-    /// - `inc`: Inclination (radians)
-    /// - `argp`: Argument of periapsis (radians)
-    #[new]
-    pub fn py_new(
-        position: PyReadonlyArray1<f64>,
-        velocity: PyReadonlyArray1<f64>,
-        raan: f64,
-        inc: f64,
-        argp: f64,
-    ) -> PyResult<Self> {
-        let pos_slice = position.as_slice()?;
-        let vel_slice = velocity.as_slice()?;
-
-        if pos_slice.len() != 3 || vel_slice.len() != 3 {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "Position and velocity must be 3-element arrays"
-            ));
-        }
-
-        let pos = Vector3::new(pos_slice[0], pos_slice[1], pos_slice[2]);
-        let vel = Vector3::new(vel_slice[0], vel_slice[1], vel_slice[2]);
-
-        Ok(Self::new(pos, vel, raan, inc, argp))
-    }
-
-    /// Create Perifocal frame from orbital elements
-    ///
-    /// # Arguments
-    /// - `a`: Semi-major axis (meters)
-    /// - `e`: Eccentricity
-    /// - `nu`: True anomaly (radians)
-    /// - `raan`: Right ascension of ascending node (radians)
-    /// - `inc`: Inclination (radians)
-    /// - `argp`: Argument of periapsis (radians)
-    /// - `mu`: Standard gravitational parameter (m³/s², default: Earth)
-    #[staticmethod]
-    #[pyo3(signature = (a, e, nu, raan, inc, argp, mu=398600.4418e9))]
-    pub fn from_orbital_elements_py(
-        a: f64,
-        e: f64,
-        nu: f64,
-        raan: f64,
-        inc: f64,
-        argp: f64,
-        mu: f64,
-    ) -> Self {
-        Self::from_orbital_elements(a, e, nu, raan, inc, argp, mu)
-    }
-
-    /// Convert to GCRS frame
-    ///
-    /// # Arguments
-    /// - `obstime`: Observation time (Epoch)
-    #[pyo3(name = "to_gcrs")]
-    pub fn py_to_gcrs(&self, obstime: &Epoch) -> GCRS {
-        self.to_gcrs(*obstime)
-    }
-
-    /// Create from GCRS frame
-    ///
-    /// # Arguments
-    /// - `gcrs`: GCRS coordinate frame
-    /// - `raan`: Right ascension of ascending node (radians)
-    /// - `inc`: Inclination (radians)
-    /// - `argp`: Argument of periapsis (radians)
-    #[staticmethod]
-    #[pyo3(name = "from_gcrs")]
-    pub fn py_from_gcrs(gcrs: &GCRS, raan: f64, inc: f64, argp: f64) -> Self {
-        Self::from_gcrs(gcrs, raan, inc, argp)
-    }
-
-    /// Get position vector as NumPy array
-    #[pyo3(name = "position")]
-    fn py_position<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
-        PyArray1::from_slice_bound(py, &[self.position.x, self.position.y, self.position.z])
-    }
-
-    /// Get velocity vector as NumPy array
-    #[pyo3(name = "velocity")]
-    fn py_velocity<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
-        PyArray1::from_slice_bound(py, &[self.velocity.x, self.velocity.y, self.velocity.z])
-    }
-
-    /// Get right ascension of ascending node
-    #[getter]
-    fn get_raan(&self) -> f64 {
-        self.raan
-    }
-
-    /// Get inclination
-    #[getter]
-    fn get_inc(&self) -> f64 {
-        self.inc
-    }
-
-    /// Get argument of periapsis
-    #[getter]
-    fn get_argp(&self) -> f64 {
-        self.argp
-    }
-
-    /// String representation
-    fn __repr__(&self) -> String {
-        format!(
-            "Perifocal(position=[{:.3e}, {:.3e}, {:.3e}] m, velocity=[{:.3e}, {:.3e}, {:.3e}] m/s, RAAN={:.4} rad, inc={:.4} rad, argp={:.4} rad)",
-            self.position.x, self.position.y, self.position.z,
-            self.velocity.x, self.velocity.y, self.velocity.z,
-            self.raan, self.inc, self.argp
-        )
-    }
-}
-
 /// J2000 inertial reference frame
 ///
 /// The J2000 frame (also known as EME2000 - Earth Mean Equator and Equinox 2000)
@@ -1340,7 +809,6 @@ impl Perifocal {
 /// - Vallado, "Fundamentals of Astrodynamics and Applications", Ch. 3
 /// - USNO Circular 179
 /// - Seidelmann, P.K. (1992), "Explanatory Supplement to the Astronomical Almanac"
-#[pyclass(module = "astrora._core")]
 #[derive(Debug, Clone, PartialEq)]
 pub struct J2000 {
     /// Position vector in J2000 frame (meters, geocentric inertial)
@@ -1455,115 +923,6 @@ impl J2000 {
     pub fn from_itrs(itrs: &ITRS) -> PoliastroResult<Self> {
         let gcrs = itrs.to_gcrs()?;
         Ok(Self::from_gcrs(&gcrs))
-    }
-}
-
-#[pymethods]
-impl J2000 {
-    /// Create a new J2000 coordinate frame
-    ///
-    /// # Arguments
-    /// - `position`: Position vector in meters [x, y, z]
-    /// - `velocity`: Velocity vector in m/s [vx, vy, vz]
-    #[new]
-    pub fn py_new(position: PyReadonlyArray1<f64>, velocity: PyReadonlyArray1<f64>) -> PyResult<Self> {
-        let pos_slice = position.as_slice()?;
-        let vel_slice = velocity.as_slice()?;
-
-        if pos_slice.len() != 3 || vel_slice.len() != 3 {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "Position and velocity must be 3-element arrays"
-            ));
-        }
-
-        Ok(Self::new(
-            Vector3::new(pos_slice[0], pos_slice[1], pos_slice[2]),
-            Vector3::new(vel_slice[0], vel_slice[1], vel_slice[2]),
-        ))
-    }
-
-    /// Create J2000 from position only (zero velocity)
-    #[staticmethod]
-    #[pyo3(name = "from_position")]
-    pub fn py_from_position(position: PyReadonlyArray1<f64>) -> PyResult<Self> {
-        let pos_slice = position.as_slice()?;
-
-        if pos_slice.len() != 3 {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "Position must be a 3-element array"
-            ));
-        }
-
-        Ok(Self::from_position(
-            Vector3::new(pos_slice[0], pos_slice[1], pos_slice[2])
-        ))
-    }
-
-    /// Convert to GCRS frame at J2000 epoch
-    #[pyo3(name = "to_gcrs")]
-    pub fn py_to_gcrs(&self) -> GCRS {
-        self.to_gcrs()
-    }
-
-    /// Create J2000 from GCRS frame
-    #[staticmethod]
-    #[pyo3(name = "from_gcrs")]
-    pub fn py_from_gcrs(gcrs: &GCRS) -> Self {
-        Self::from_gcrs(gcrs)
-    }
-
-    /// Convert to ICRS frame
-    #[pyo3(name = "to_icrs")]
-    pub fn py_to_icrs(&self) -> PyResult<ICRS> {
-        self.to_icrs().map_err(|e| e.into())
-    }
-
-    /// Create J2000 from ICRS frame
-    #[staticmethod]
-    #[pyo3(name = "from_icrs")]
-    pub fn py_from_icrs(icrs: &ICRS) -> Self {
-        Self::from_icrs(icrs)
-    }
-
-    /// Convert to ITRS (Earth-fixed) frame at J2000 epoch
-    #[pyo3(name = "to_itrs")]
-    pub fn py_to_itrs(&self) -> PyResult<ITRS> {
-        self.to_itrs().map_err(|e| e.into())
-    }
-
-    /// Create J2000 from ITRS frame
-    #[staticmethod]
-    #[pyo3(name = "from_itrs")]
-    pub fn py_from_itrs(itrs: &ITRS) -> PyResult<Self> {
-        Self::from_itrs(itrs).map_err(|e| e.into())
-    }
-
-    /// Get position vector as NumPy array
-    #[getter]
-    pub fn get_position<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
-        PyArray1::from_slice_bound(py, self.position.as_slice())
-    }
-
-    /// Get velocity vector as NumPy array
-    #[getter]
-    pub fn get_velocity<'py>(&self, py: Python<'py>) -> Bound<'py, PyArray1<f64>> {
-        PyArray1::from_slice_bound(py, self.velocity.as_slice())
-    }
-
-    /// Get the J2000 epoch
-    #[staticmethod]
-    #[pyo3(name = "epoch")]
-    fn py_epoch() -> Epoch {
-        Epoch::j2000()
-    }
-
-    /// String representation
-    fn __repr__(&self) -> String {
-        format!(
-            "J2000(position=[{:.3e}, {:.3e}, {:.3e}] m, velocity=[{:.3e}, {:.3e}, {:.3e}] m/s, epoch=J2000.0)",
-            self.position.x, self.position.y, self.position.z,
-            self.velocity.x, self.velocity.y, self.velocity.z
-        )
     }
 }
 

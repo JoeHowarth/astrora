@@ -34,8 +34,6 @@
 
 use sgp4::{Constants, Elements, MinutesSinceEpoch};
 use thiserror::Error;
-use pyo3::exceptions::PyRuntimeError;
-use pyo3::PyErr;
 
 /// Errors that can occur during SGP4 propagation
 #[derive(Error, Debug)]
@@ -54,13 +52,6 @@ pub enum Sgp4Error {
 
     #[error("Time offset out of range: {0} minutes")]
     TimeOutOfRange(f64),
-}
-
-// Implement conversion from Sgp4Error to PyErr for Python bindings
-impl From<Sgp4Error> for PyErr {
-    fn from(err: Sgp4Error) -> PyErr {
-        PyRuntimeError::new_err(err.to_string())
-    }
 }
 
 /// Satellite state in TEME (True Equator, Mean Equinox) reference frame

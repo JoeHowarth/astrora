@@ -15,7 +15,6 @@
 
 use crate::core::error::{PoliastroError, PoliastroResult};
 use crate::core::linalg::{Vector3, Matrix3};
-use pyo3::prelude::*;
 use std::f64::consts::PI;
 
 #[cfg(feature = "serde")]
@@ -33,27 +32,20 @@ pub const DEFAULT_TOL: f64 = 1e-8;
 /// - `raan`: Right ascension of ascending node (Ω, radians, 0 ≤ Ω < 2π)
 /// - `argp`: Argument of periapsis (ω, radians, 0 ≤ ω < 2π)
 /// - `nu`: True anomaly (ν, radians, 0 ≤ ν < 2π)
-#[pyclass(module = "astrora._core", name = "OrbitalElements")]
 #[derive(Debug, Clone, Copy, PartialEq)]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 pub struct OrbitalElements {
     /// Semi-major axis (m)
-    #[pyo3(get, set)]
     pub a: f64,
     /// Eccentricity (dimensionless)
-    #[pyo3(get, set)]
     pub e: f64,
     /// Inclination (radians)
-    #[pyo3(get, set)]
     pub i: f64,
     /// Right ascension of ascending node (radians)
-    #[pyo3(get, set)]
     pub raan: f64,
     /// Argument of periapsis (radians)
-    #[pyo3(get, set)]
     pub argp: f64,
     /// True anomaly (radians)
-    #[pyo3(get, set)]
     pub nu: f64,
 }
 
@@ -156,26 +148,19 @@ impl OrbitalElements {
 /// # References
 /// Walker, M. J. H., Ireland, B., and Owens, J., "A Set of Modified Equinoctial
 /// Orbital Elements", Celestial Mechanics, Vol. 36, pp. 409-419, 1985.
-#[pyclass(module = "astrora._core", name = "EquinoctialElements")]
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct EquinoctialElements {
     /// Semi-latus rectum (m)
-    #[pyo3(get, set)]
     pub p: f64,
     /// Eccentricity x-component (dimensionless)
-    #[pyo3(get, set)]
     pub f: f64,
     /// Eccentricity y-component (dimensionless)
-    #[pyo3(get, set)]
     pub g: f64,
     /// Inclination x-component (dimensionless)
-    #[pyo3(get, set)]
     pub h: f64,
     /// Inclination y-component (dimensionless)
-    #[pyo3(get, set)]
     pub k: f64,
     /// True longitude (radians)
-    #[pyo3(get, set)]
     pub L: f64,
 }
 
@@ -744,163 +729,6 @@ fn normalize_angle(angle: f64) -> f64 {
         normalized += 2.0 * PI;
     }
     normalized
-}
-
-// ============================================================================
-// Python Bindings
-// ============================================================================
-
-#[pymethods]
-impl OrbitalElements {
-    /// Create new orbital elements
-    ///
-    /// # Arguments
-    /// * `a` - Semi-major axis (meters)
-    /// * `e` - Eccentricity
-    /// * `i` - Inclination (radians)
-    /// * `raan` - Right ascension of ascending node (radians)
-    /// * `argp` - Argument of periapsis (radians)
-    /// * `nu` - True anomaly (radians)
-    #[new]
-    fn py_new(a: f64, e: f64, i: f64, raan: f64, argp: f64, nu: f64) -> Self {
-        Self::new(a, e, i, raan, argp, nu)
-    }
-
-    /// Calculate orbital period for elliptical orbits (seconds)
-    ///
-    /// # Arguments
-    /// * `mu` - Standard gravitational parameter (m³/s²)
-    fn orbital_period(&self, mu: f64) -> PyResult<f64> {
-        self.period(mu).map_err(|e| e.into())
-    }
-
-    /// Calculate periapsis distance (m)
-    #[getter]
-    fn periapsis_distance(&self) -> f64 {
-        self.periapsis()
-    }
-
-    /// Calculate apoapsis distance (m)
-    #[getter]
-    fn apoapsis_distance(&self) -> f64 {
-        self.apoapsis()
-    }
-
-    /// Calculate semi-latus rectum (m)
-    #[getter]
-    fn p(&self) -> f64 {
-        self.semi_latus_rectum()
-    }
-
-    /// Calculate specific angular momentum magnitude (m²/s)
-    fn h_magnitude(&self, mu: f64) -> f64 {
-        self.specific_angular_momentum_magnitude(mu)
-    }
-
-    /// String representation
-    fn __repr__(&self) -> String {
-        format!(
-            "OrbitalElements(a={:.3e} m, e={:.6}, i={:.6} rad, Ω={:.6} rad, ω={:.6} rad, ν={:.6} rad)",
-            self.a, self.e, self.i, self.raan, self.argp, self.nu
-        )
-    }
-
-    fn __str__(&self) -> String {
-        format!(
-            "a = {:.3} km\ne = {:.6}\ni = {:.3}°\nΩ = {:.3}°\nω = {:.3}°\nν = {:.3}°",
-            self.a / 1000.0,
-            self.e,
-            self.i.to_degrees(),
-            self.raan.to_degrees(),
-            self.argp.to_degrees(),
-            self.nu.to_degrees()
-        )
-    }
-}
-
-#[pymethods]
-impl EquinoctialElements {
-    /// Create new modified equinoctial elements
-    ///
-    /// # Arguments
-    /// * `p` - Semi-latus rectum (meters)
-    /// * `f` - Eccentricity x-component
-    /// * `g` - Eccentricity y-component
-    /// * `h` - Inclination x-component
-    /// * `k` - Inclination y-component
-    /// * `L` - True longitude (radians)
-    #[new]
-    fn py_new(p: f64, f: f64, g: f64, h: f64, k: f64, L: f64) -> Self {
-        Self::new(p, f, g, h, k, L)
-    }
-
-    /// Calculate eccentricity
-    #[getter]
-    fn eccentricity_value(&self) -> f64 {
-        self.eccentricity()
-    }
-
-    /// Calculate semi-major axis for elliptical orbits (meters)
-    #[getter]
-    fn semi_major_axis_value(&self) -> PyResult<f64> {
-        self.semi_major_axis().map_err(|e| e.into())
-    }
-
-    /// Calculate inclination (radians)
-    #[getter]
-    fn inclination_value(&self) -> f64 {
-        self.inclination()
-    }
-
-    /// Calculate orbital period for elliptical orbits (seconds)
-    ///
-    /// # Arguments
-    /// * `mu` - Standard gravitational parameter (m³/s²)
-    fn orbital_period(&self, mu: f64) -> PyResult<f64> {
-        self.period(mu).map_err(|e| e.into())
-    }
-
-    /// Convert to classical orbital elements
-    ///
-    /// # Arguments
-    /// * `tol` - Tolerance for singularity checks (default: 1e-8)
-    #[pyo3(signature = (tol=None))]
-    fn to_classical(&self, tol: Option<f64>) -> PyResult<OrbitalElements> {
-        equinoctial_to_coe(self, tol.unwrap_or(DEFAULT_TOL)).map_err(|e| e.into())
-    }
-
-    /// Create from classical orbital elements
-    ///
-    /// # Arguments
-    /// * `elements` - Classical orbital elements
-    #[staticmethod]
-    fn from_classical(elements: &OrbitalElements) -> Self {
-        coe_to_equinoctial(elements)
-    }
-
-    /// String representation
-    fn __repr__(&self) -> String {
-        format!(
-            "EquinoctialElements(p={:.3e} m, f={:.6}, g={:.6}, h={:.6}, k={:.6}, L={:.6} rad)",
-            self.p, self.f, self.g, self.h, self.k, self.L
-        )
-    }
-
-    fn __str__(&self) -> String {
-        let e = self.eccentricity();
-        let i = self.inclination();
-        format!(
-            "p = {:.3} km\nf = {:.6}\ng = {:.6}\nh = {:.6}\nk = {:.6}\nL = {:.6} rad\n(derived: e = {:.6}, i = {:.3}°)",
-            self.p / 1000.0,
-            self.f,
-            self.g,
-            self.h,
-            self.k,
-            self.L,
-            e,
-            i.to_degrees()
-        )
-    }
 }
 
 // ============================================================================

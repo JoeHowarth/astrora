@@ -5,10 +5,8 @@
 
 use crate::core::linalg::Vector3;
 use crate::core::error::{PoliastroError, PoliastroResult};
-use pyo3::prelude::*;
 
 /// Cartesian state vector (position and velocity)
-#[pyclass(name = "CartesianState", module = "astrora._core")]
 #[derive(Debug, Clone, Copy)]
 pub struct CartesianState {
     /// Position vector [x, y, z] in meters
@@ -217,139 +215,6 @@ impl CartesianState {
         } else {
             "hyperbolic"
         }
-    }
-}
-
-// =============================================================================
-// Python Bindings
-// =============================================================================
-
-#[pymethods]
-impl CartesianState {
-    /// Create a new Cartesian state from position and velocity arrays
-    ///
-    /// # Arguments
-    /// * `position` - Position vector [x, y, z] in meters
-    /// * `velocity` - Velocity vector [vx, vy, vz] in meters/second
-    ///
-    /// # Returns
-    /// CartesianState object
-    #[new]
-    pub fn py_new(position: [f64; 3], velocity: [f64; 3]) -> Self {
-        Self::new(
-            Vector3::new(position[0], position[1], position[2]),
-            Vector3::new(velocity[0], velocity[1], velocity[2]),
-        )
-    }
-
-    /// Get position vector as list [x, y, z]
-    #[getter]
-    pub fn get_position(&self) -> [f64; 3] {
-        [self.position.x, self.position.y, self.position.z]
-    }
-
-    /// Get velocity vector as list [vx, vy, vz]
-    #[getter]
-    pub fn get_velocity(&self) -> [f64; 3] {
-        [self.velocity.x, self.velocity.y, self.velocity.z]
-    }
-
-    /// Calculate specific orbital energy (m²/s²)
-    ///
-    /// # Arguments
-    /// * `mu` - Standard gravitational parameter (m³/s²)
-    ///
-    /// # Returns
-    /// Specific orbital energy
-    #[pyo3(name = "specific_energy")]
-    pub fn py_specific_energy(&self, mu: f64) -> f64 {
-        self.specific_energy(mu)
-    }
-
-    /// Calculate specific angular momentum vector (m²/s)
-    ///
-    /// # Returns
-    /// Angular momentum vector [hx, hy, hz]
-    #[pyo3(name = "specific_angular_momentum")]
-    pub fn py_specific_angular_momentum(&self) -> [f64; 3] {
-        let h = self.specific_angular_momentum();
-        [h.x, h.y, h.z]
-    }
-
-    /// Calculate semi-major axis (m)
-    ///
-    /// # Arguments
-    /// * `mu` - Standard gravitational parameter (m³/s²)
-    ///
-    /// # Returns
-    /// Semi-major axis in meters
-    ///
-    /// # Raises
-    /// ValueError: If orbit is parabolic or hyperbolic
-    #[pyo3(name = "semi_major_axis")]
-    pub fn py_semi_major_axis(&self, mu: f64) -> PyResult<f64> {
-        self.semi_major_axis(mu).map_err(Into::into)
-    }
-
-    /// Calculate orbital period (s)
-    ///
-    /// # Arguments
-    /// * `mu` - Standard gravitational parameter (m³/s²)
-    ///
-    /// # Returns
-    /// Orbital period in seconds
-    ///
-    /// # Raises
-    /// ValueError: If orbit is not elliptical
-    #[pyo3(name = "period")]
-    pub fn py_period(&self, mu: f64) -> PyResult<f64> {
-        self.period(mu).map_err(Into::into)
-    }
-
-    /// Calculate eccentricity vector
-    ///
-    /// # Arguments
-    /// * `mu` - Standard gravitational parameter (m³/s²)
-    ///
-    /// # Returns
-    /// Eccentricity vector [ex, ey, ez]
-    #[pyo3(name = "eccentricity_vector")]
-    pub fn py_eccentricity_vector(&self, mu: f64) -> [f64; 3] {
-        let e = self.eccentricity_vector(mu);
-        [e.x, e.y, e.z]
-    }
-
-    /// Calculate eccentricity magnitude
-    ///
-    /// # Arguments
-    /// * `mu` - Standard gravitational parameter (m³/s²)
-    ///
-    /// # Returns
-    /// Orbital eccentricity (dimensionless)
-    #[pyo3(name = "eccentricity")]
-    pub fn py_eccentricity(&self, mu: f64) -> f64 {
-        self.eccentricity(mu)
-    }
-
-    /// Get orbit type classification
-    ///
-    /// # Arguments
-    /// * `mu` - Standard gravitational parameter (m³/s²)
-    ///
-    /// # Returns
-    /// Orbit type: "circular", "elliptical", "parabolic", or "hyperbolic"
-    #[pyo3(name = "orbit_type")]
-    pub fn py_orbit_type(&self, mu: f64) -> &'static str {
-        self.orbit_type(mu)
-    }
-
-    /// String representation
-    fn __repr__(&self) -> String {
-        format!(
-            "CartesianState(position=[{:.3e}, {:.3e}, {:.3e}] m, velocity=[{:.3e}, {:.3e}, {:.3e}] m/s)",
-            self.position.x, self.position.y, self.position.z,
-            self.velocity.x, self.velocity.y, self.velocity.z
-        )
     }
 }
 

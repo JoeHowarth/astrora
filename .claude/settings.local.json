@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(perl -i -0777 -pe:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

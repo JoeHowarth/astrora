@@ -8,19 +8,14 @@ description = "Astrora - Rust-backed astrodynamics library - core computational 
 readme = "README.md"
 license = "MIT"
 repository = "https://github.com/cachemcclure/astrora"
-keywords = ["astrodynamics", "orbital-mechanics", "aerospace", "space", "python"]
+keywords = ["astrodynamics", "orbital-mechanics", "aerospace", "space"]
 categories = ["science", "simulation"]
 
 [lib]
 name = "astrora_core"
-crate-type = ["cdylib", "rlib"]  # rlib needed for benchmarks and tests
+crate-type = ["rlib"]
 
 [dependencies]
-# PyO3 and Python integration
-# Note: extension-module is default feature for Python builds, disabled for benchmarks/tests
-pyo3 = { version = "0.22", features = ["abi3-py38"], default-features = false }
-numpy = "0.22"
-
 # Mathematical and scientific computing
 # NOTE: These crates automatically use SIMD (SSE2/AVX/AVX2/NEON) for optimal performance
 ndarray = "0.16"        # N-dimensional arrays (uses matrixmultiply for SIMD matrix ops)
@@ -70,8 +65,7 @@ name = "propagators_optimized"
 harness = false
 
 [features]
-default = ["extension-module"]
-extension-module = ["pyo3/extension-module"]
+default = []
 
 [profile.release]
 # Optimization settings for performance
